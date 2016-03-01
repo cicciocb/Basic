@@ -25,7 +25,6 @@
 
 //Onewire tempture sensor code conntributed by Rotohammer.
 
-
 //#include <ArduinoJson.h>
 #include "spiffs/spiffs.h"
 #include <FS.h>
@@ -48,7 +47,7 @@
 #include "ESP8266httpUpdate.h"
 #include <time.h>
 //#include <HttpClient.h>                   // that line needs to be commented for esp8266-2.0.0-rc1
-#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
+//#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
 
 //LCD Stuff
 #include <LiquidCrystal_SR.h>
@@ -74,7 +73,7 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(256, 2, NEO_GRB + NEO_KHZ800);;
 //ThingSpeak Stuff
 
 
-const char BasicVersion[] = "ESP Basic 1.82r6_cicciocb";
+const char BasicVersion[] = "ESP Basic 1.82r7_cicciocb";
 
 
 
@@ -180,6 +179,7 @@ for (i = 0; i < arrayOfLines.length; i++)
   {
     arrayOfLines[i] = replaceAll(arrayOfLines[i],"+", "%2B");
     arrayOfLines[i] = replaceAll(arrayOfLines[i],"&", "%26");
+    arrayOfLines[i] = replaceAll(arrayOfLines[i],"#", "%23");
   stocca(encodeURI(arrayOfLines[i]));
     document.getElementById("Status").value = i.toString();
   }
