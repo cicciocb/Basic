@@ -16,6 +16,7 @@ void ExicuteTheCurrentLine()
 
   Param0.toLowerCase();
 
+Line_For_Eval = inData; /////////////////////////////////////////////////////////////////////////////////////////////////
 
   int valParam0 = Param0.toInt();
   int valParam1 = Param1.toInt();

@@ -73,13 +73,12 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(256, 2, NEO_GRB + NEO_KHZ800);;
 //ThingSpeak Stuff
 
 
-const char BasicVersion[] = "ESP Basic 1.82r8_cicciocb";
+const char BasicVersion[] = "ESP Basic 1.82r9_cicciocb";
 
-
-
-
-
-
+#include "expression_parser.h"
+bool  _parser_failed;
+char* _parser_error_msg;
+String Line_For_Eval;
 
 
 
@@ -373,6 +372,19 @@ void setup() {
 
   //CheckWaitForRunningCode();
 
+  // test PARSER //
+
+const char *expr2 = "2^3 + 2.0 - 8.0";
+    // parse and expression with no variables or functions
+  double value = parse_expression( expr2 );
+ // if( value == value )
+    Serial.println( expr2);
+    Serial.println( value );
+    if (_parser_failed == true)
+    {
+      Serial.println(String(_parser_error_msg));  
+    }
+
   server.on("/", []()
   {
     String WebOut;
@@ -503,7 +515,7 @@ void setup() {
     				break;
     			}
 
-			  TextboxProgramBeingEdited = TextboxProgramBeingEdited + "\n" + BasicProgram(i);
+			  TextboxProgramBeingEdited = TextboxProgramBeingEdited + "\n" + GetRidOfurlCharacters(BasicProgram(i));
 
         }
         if (TextboxProgramBeingEdited.length() > 0)
