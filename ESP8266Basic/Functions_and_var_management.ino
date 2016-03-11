@@ -162,14 +162,14 @@ String GetMeThatVar(String VariableNameToFind)
     if (cnt == 0)
     {
       String argument = Line_For_Eval.substring(0, i+1);
-      double r = evaluate(argument);
+      String r = evaluate(argument);
       if (_parser_failed == true)
       {
         PrintAndWebOut(String(_parser_error_msg)); 
        return F("error");
       }
       else
-        return String(r);      
+        return r;      
     }
     else
       return F("Incorrect parenthesys");  
