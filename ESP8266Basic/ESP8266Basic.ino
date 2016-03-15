@@ -670,13 +670,13 @@ void setup() {
   }
 
 
-  //Wire.begin(0, 2);
+  Wire.begin(0, 2);
 
   //  keyboard.begin(14, 12); //For PS2 keyboard input
 
-  //StartUp_OLED();
-  //lcd.begin(16, 2); // initialize the lcd for 16 chars 2 lines and turn on backlight
-  //sensors.begin();
+  StartUp_OLED();
+  lcd.begin(16, 2); // initialize the lcd for 16 chars 2 lines and turn on backlight
+  sensors.begin();
 
   LoadBasicProgramFromFlash("uploads/" + ProgramName + ".bas");
   
