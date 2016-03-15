@@ -19,14 +19,12 @@ String DoubleToString(double d)
 
 String evaluate(String expr)
 {
-  double double_value;
-  String string_value;
   int status;
-  int num_arguments = 10;
-//  Serial.print("eval function ");
-//  Serial.print(expr);
+  //Serial.print("eval function ");
+  //Serial.print(expr);
+  //Serial.print("---");
   delay(0);
-  status = parse_expression_with_callbacks( expr.c_str(), variable_callback, function_callback, &num_arguments, &double_value, &string_value  );
+  status = parse_expression_with_callbacks( expr.c_str(), variable_callback, function_callback, NULL, &double_value, string_value  );
   if (status == PARSER_STRING)
     return string_value;
   else
@@ -45,7 +43,7 @@ String evaluate(String expr)
          PARSER_STRING if the variable exists and value was set by the callback with the string result stored in value_str or
          PARSER_FALSE otherwise.
 */ 
-int variable_callback( void *user_data, const char *name, double *value, String *args_str, String *value_str  ){
+int variable_callback( void *user_data, const char *name, double *value, String *value_str  ){
   // look up the variables by name
   String Name = String(name);
   delay(0);
@@ -56,7 +54,7 @@ int variable_callback( void *user_data, const char *name, double *value, String 
       delay(0);
       // we need to put some intelligence in order to understand if the variable is a string or a number
       // we make a fast check, needs to be improved!
-      *value =  AllMyVaribles[i][1].toFloat();
+      *value =  atof(AllMyVaribles[i][1].c_str());
       *value_str = AllMyVaribles[i][1];
       if ( (*value == 0) &&  (AllMyVaribles[i][1].length() > 1)) // if the converted value is zero but the string is not "0"
         return PARSER_STRING;
@@ -82,7 +80,7 @@ int variable_callback( void *user_data, const char *name, double *value, String 
          PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
          PARSER_FALSE otherwise.
 */
-int function_callback( void *user_data, const char *name, const int num_args, const double *args, double *value, String *args_str, String *value_str ){
+int function_callback( void *user_data, const char *name, const int num_args, const double *args, double *value, String **args_str, String *value_str ){
   int i, max_args;
   double tmp;
   String fname = String(name);
@@ -133,7 +131,7 @@ int function_callback( void *user_data, const char *name, const int num_args, co
   if( fname == F("mid") && num_args == 2 ){
     // example of the mid(string, start)
     // set return value 
-    *value_str = args_str[0].substring((int) args[1]-1);
+    *value_str = args_str[0]->substring((int) args[1]-1);
     *value = -1;
     return PARSER_STRING;
   }
@@ -141,7 +139,7 @@ int function_callback( void *user_data, const char *name, const int num_args, co
   if( fname == F("mid") && num_args == 3 ){
     // example of the mid(string, start, end)
     // set return value 
-    *value_str = args_str[0].substring((int) args[1]-1, (int) (args[1] + args[2]) -1 );
+    *value_str = args_str[0]->substring((int) args[1]-1, (int) (args[1] + args[2]) -1 );
     *value = -1;
     return PARSER_STRING;
   }
@@ -149,7 +147,7 @@ int function_callback( void *user_data, const char *name, const int num_args, co
   if( fname == F("right") && num_args == 2 ){
     // example of the right(string, length)
     // set return value 
-    *value_str = args_str[0].substring(args_str[0].length() - (int) args[1]);
+    *value_str = args_str[0]->substring(args_str[0]->length() - (int) args[1]);
     *value = -1;
     return PARSER_STRING;
   } 
@@ -157,7 +155,7 @@ int function_callback( void *user_data, const char *name, const int num_args, co
   if( fname == F("left") && num_args == 2 ){
     // example of the left(string, length)
     // set return value 
-    *value_str = args_str[0].substring(0, (int) args[1]);
+    *value_str = args_str[0]->substring(0, (int) args[1]);
     *value = -1;
     return PARSER_STRING;
   } 
@@ -165,30 +163,30 @@ int function_callback( void *user_data, const char *name, const int num_args, co
   if( fname == F("len") && num_args == 1 ){
     // example of the len(string)
     // set return value 
-    *value  = args_str[0].length();
+    *value  = args_str[0]->length();
     return PARSER_TRUE;
   }
   else
   if( fname == F("upper") && num_args == 1 ){
     // example of the upper(string)
     // set return value 
-    args_str[0].toUpperCase();
-    *value_str  =  args_str[0];    
+    args_str[0]->toUpperCase();
+    *value_str  =  *args_str[0];    
     return PARSER_STRING;
   }
   else
   if( fname == F("lower") && num_args == 1 ){
     // example of the lower(string)
     // set return value 
-    args_str[0].toLowerCase();
-    *value_str  =  args_str[0];
+    args_str[0]->toLowerCase();
+    *value_str  =  *args_str[0];
     return PARSER_STRING;
   } 
   else
   if( fname == F("instr") && num_args == 2 ){
     // example of the instr(string, string)
     // set return value 
-    *value  = args_str[0].indexOf(args_str[1]) + 1;
+    *value  = args_str[0]->indexOf(*args_str[1]) + 1;
     return PARSER_TRUE;
   } 
   else
@@ -216,15 +214,15 @@ int function_callback( void *user_data, const char *name, const int num_args, co
     if( fname == F("asc") && num_args == 1 ){
     // example of the asc(string) -> return the ascii code of the 1st char
     // set return value 
-    *value = args_str[0][0];
+    *value = (*args_str[0])[0];
     return PARSER_TRUE;
   }
   else
   if( fname == F("replace") && num_args == 3 ){
     // example of the replace(string, string to search for, string to replacement for}
     // set return value 
-    args_str[0].replace(args_str[1], args_str[2]);
-    *value_str = args_str[0];
+    args_str[0]->replace(*args_str[1], *args_str[2]);
+    *value_str = *args_str[0];
     return PARSER_STRING;
   }
   else

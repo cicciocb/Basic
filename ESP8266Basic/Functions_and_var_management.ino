@@ -142,13 +142,13 @@ String GetMeThatVar(String VariableNameToFind)
   {
     // here we try to isolate properly the argument for eval as Param0 don't give a good result
     // several steps :
-    // step 1: remove "eval"
-    Line_For_Eval = GetRidOfurlCharacters(Line_For_Eval.substring(Line_For_Eval.indexOf("eval")+4));
+    // step 1: remove "eval("
+    Line_For_Eval = GetRidOfurlCharacters(Line_For_Eval.substring(Line_For_Eval.indexOf("eval")+5));
 //    Serial.print("line_eval:");
 //    Serial.println(Line_For_Eval);
     // step 2: count the parenthesis until the difference between opened and closed is 0 ( or when we reach the end of the line -> in that case error!)
     int i;
-    int cnt = 0;
+    int cnt = 1;  // attention! we consider that the string starts just after the 'eval(' so we consider that the first parenthesys is included
     for (i = 0; i < Line_For_Eval.length(); i++)
     {
       if (Line_For_Eval[i] == '(')
@@ -161,9 +161,12 @@ String GetMeThatVar(String VariableNameToFind)
     }
     if (cnt == 0)
     {
-      String argument = Line_For_Eval.substring(0, i+1);
-      String r = evaluate(argument);
-      if (_parser_failed == true)
+      // one important point: removing all the leading parenthesys reduce the number of recursions! ex: (sin(a)) counts 2 iterations compared to sin(a) 
+      Line_For_Eval = Line_For_Eval.substring(0, i);
+      //Serial.println(Line_For_Eval);
+      String r = evaluate(Line_For_Eval);
+
+ 	  if (_parser_failed == true)
       {
         PrintAndWebOut(String(_parser_error_msg)); 
        return F("error");
@@ -397,7 +400,7 @@ void SetMeThatVar(String VariableNameToFind, String NewContents)
   {
     for (byte i = 0; i < 50; i++)
     {
-      if (AllMyVaribles[i][1] == "")
+      if (AllMyVaribles[i][0] == "")
       {
         AllMyVaribles[i][0] = VariableNameToFind;
         AllMyVaribles[i][1] = NewContents;

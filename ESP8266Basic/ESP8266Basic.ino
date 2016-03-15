@@ -47,7 +47,7 @@
 #include "ESP8266httpUpdate.h"
 #include <time.h>
 //#include <HttpClient.h>                   // that line needs to be commented for esp8266-2.0.0-rc1
-//#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
+#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
 
 //LCD Stuff
 #include <LiquidCrystal_SR.h>
@@ -73,13 +73,14 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(256, 2, NEO_GRB + NEO_KHZ800);;
 //ThingSpeak Stuff
 
 
-const char BasicVersion[] = "ESP Basic 1.82r10_cicciocb";
+const char BasicVersion[] = "ESP Basic 1.82r11_cicciocb";
 
 #include "expression_parser_string.h"
 bool  _parser_failed;
 char* _parser_error_msg;
 String Line_For_Eval;
-
+double double_value;
+String string_value ;
 
 
 OneWire oneWire(2);
@@ -669,13 +670,13 @@ void setup() {
   }
 
 
-  Wire.begin(0, 2);
+  //Wire.begin(0, 2);
 
   //  keyboard.begin(14, 12); //For PS2 keyboard input
 
-  StartUp_OLED();
-  lcd.begin(16, 2); // initialize the lcd for 16 chars 2 lines and turn on backlight
-  sensors.begin();
+  //StartUp_OLED();
+  //lcd.begin(16, 2); // initialize the lcd for 16 chars 2 lines and turn on backlight
+  //sensors.begin();
 
   LoadBasicProgramFromFlash("uploads/" + ProgramName + ".bas");
   
@@ -1091,12 +1092,15 @@ String getValue(String data, char separator, int index)
   {
     if (data[i] == '\"' )
     {
+      chunkVal.concat(data[i]);
       i++;
+      
       while (i <= maxIndex && data[i] != '\"' ) {
         chunkVal.concat(data[i]);
         i++;
         delay(0);
       }
+      chunkVal.concat(data[i]);
     }
     else if (data[i] == '|' )
     {
