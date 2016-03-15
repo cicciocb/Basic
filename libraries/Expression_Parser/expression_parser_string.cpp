@@ -28,29 +28,26 @@ using namespace std;
 extern bool  _parser_failed;
 extern char* _parser_error_msg;
 
- int parse_expression( const char *expr, double *value, String *value_str )
+/*  int ICACHE_FLASH_ATTR parse_expression( const char *expr, double *value, String *value_str )
  {
  	return parse_expression_with_callbacks( expr, NULL, NULL, NULL, value, value_str );
  }
-
-int parse_expression_with_callbacks( const char *expr, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data, double *value, String *str_value ){
-	double val;
+ */
+int ICACHE_FLASH_ATTR parse_expression_with_callbacks( const char *expr, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data, double *value, String &str_value ){
 	int r;
 	parser_data pd;
-    _parser_failed = false;
-    delay(0);
+  _parser_failed = false;
 	parser_data_init( &pd, expr, variable_cb, function_cb, user_data );
-	r = parser_parse( &pd, &val, str_value );
+	//r = parser_parse( &pd, &val, &str );
+	r = parser_parse( &pd, value, str_value );
 	if( pd.error ){
 		//printf("Error: %s\n", pd.error );
 		//printf("Expression '%s' failed to parse, returning nan\n", expr );
 	}
-	*value = val;
 	return r;	  
 }
 
-int parser_data_init( parser_data *pd, const char *str, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data ){
-	delay(0);
+int ICACHE_FLASH_ATTR parser_data_init( parser_data *pd, const char *str, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data ){
 	pd->str = str;
 	pd->len = strlen( str )+1;
 	pd->pos = 0;
@@ -62,17 +59,16 @@ int parser_data_init( parser_data *pd, const char *str, parser_variable_callback
 }
 
 
-int parser_parse( parser_data *pd, double *value, String *str_value ){
-    double result = 0.0;
+int ICACHE_FLASH_ATTR parser_parse( parser_data *pd, double *value, String &str_value ){
+    //double result = 0.0;
 	int r;
-	delay(0);
 	// set the jump position and launch the parser
 	//if( !setjmp( pd->err_jmp_buf ) ){
     if (1){
 #if !defined(PARSER_EXCLUDE_BOOLEAN_OPS)
-		r = parser_read_boolean_or( pd, &result, str_value );
+		r = parser_read_boolean_or( pd, value, str_value );
 #else
-		result = parser_read_expr( pd );
+		r = parser_read_expr( pd, value, str_value );
 #endif
         parser_eat_whitespace( pd );
         if( pd->pos < pd->len-1 )
@@ -80,8 +76,10 @@ int parser_parse( parser_data *pd, double *value, String *str_value ){
             parser_error( pd, PSTR("Failed to reach end of input expression, likely malformed input") );
         }
 		else
-			*value = result;
+		{
+			//*value = result;
 			return r;
+		}
 	}
 	else 
 	{
@@ -93,15 +91,15 @@ int parser_parse( parser_data *pd, double *value, String *str_value ){
 	return PARSER_FALSE;
 }
 									   
-void parser_error( parser_data *pd, const char *err ){
-	delay(0);
+void ICACHE_FLASH_ATTR parser_error( parser_data *pd, const char *err ){
 	pd->error = err;
 	_parser_failed = true;
 	_parser_error_msg = (char *) err;
 	//longjmp( pd->err_jmp_buf, 1);
 }
 
-char parser_peek( parser_data *pd ){
+char ICACHE_FLASH_ATTR parser_peek( parser_data *pd ){
+delay(0);
 	if( pd->pos < pd->len )
 	{
 		return pd->str[pd->pos];
@@ -110,30 +108,36 @@ char parser_peek( parser_data *pd ){
 	return '\0';
 }
 
-char parser_peek_n( parser_data *pd, int n ){
+char ICACHE_FLASH_ATTR parser_peek_n( parser_data *pd, int n ){
+delay(0);
 	if( pd->pos+n < pd->len )
 		return pd->str[pd->pos+n];
 	parser_error( pd, PSTR("Tried to read past end of String!" ));
 	return '\0';
 }
 
-char parser_eat( parser_data *pd ){
+char ICACHE_FLASH_ATTR parser_eat( parser_data *pd ){
+delay(0);
 	if( pd->pos < pd->len )
 		return pd->str[pd->pos++];
 	parser_error( pd, PSTR("Tried to read past end of String!" ));
 	return '\0';
 }
 
-void parser_eat_whitespace( parser_data *pd ){
+void ICACHE_FLASH_ATTR parser_eat_whitespace( parser_data *pd ){
+delay(0);
 	while( isspace( parser_peek( pd ) ) )
 		parser_eat( pd );
 }
 
-int parser_read_Value( parser_data *pd, double *value, String *str_value ){
-	char c, token[PARSER_MAX_TOKEN_SIZE];
+int ICACHE_FLASH_ATTR parser_read_Value( parser_data *pd, double *value, String &str_value ){
+	char c;
+	char *token; //[PARSER_MAX_TOKEN_SIZE];
 	int pos=0;
-	double val=0.0;
-	delay(0);
+	//double val=0.0;
+	*value = 0.0;
+	token = (char*) malloc(PARSER_MAX_TOKEN_SIZE); // allocate memory 
+	
 	// read a leading sign
 	c = parser_peek( pd );
 	if( c == '+' || c == '-' )
@@ -177,7 +181,7 @@ int parser_read_Value( parser_data *pd, double *value, String *str_value ){
 
   // cicciocb TBD : replace the atof with a more efficient function
   // and insert a more strict control on the double-precision format
-  val = atof(token);
+  *value = atof(token);
 	// check that a double-precision was read, otherwise throw an error
 	//if( pos == 0) || sscanf( token, "%lf", &val ) != 1 )
   if( (pos == 0))// || (token[0] != '0' ) )
@@ -198,21 +202,21 @@ int parser_read_Value( parser_data *pd, double *value, String *str_value ){
 		parser_eat( pd );
 		token[pos] = '\0';
 		// return the parsed value
-		*str_value = String(token);
+		str_value = String(token);
+		free(token);	// free alllocated memory
 		// return the status
 		return PARSER_STRING;
 	}
 
 	// return the parsed value
-	*value = val;
-
+	//*value = val;
+	free(token);	// free alllocated memory
 	// return the status
 	return PARSER_TRUE;
 }
-int parser_read_argument( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_argument( parser_data *pd, double *value, String &str_value ){
 	char c;
 	int r;
-	delay(0);
 	// eat leading whitespace
 	parser_eat_whitespace( pd );
 	
@@ -235,30 +239,33 @@ int parser_read_argument( parser_data *pd, double *value, String *str_value ){
 
 }
 
-int parser_read_argument_list( parser_data *pd, int *num_args, double *args, String *args_str){
+int ICACHE_FLASH_ATTR parser_read_argument_list( parser_data *pd, int *num_args, double *args, String **args_str){
 	char c;
 	int r = PARSER_FALSE; // in case the argument is empty as fun(), the return value will be PARSER_FALSE
-
 	// set the initial number of arguments to zero
 	*num_args = 0;
-	
+	//Serial.println("parser_read_argument_list");
 	// eat any leading whitespace
 	parser_eat_whitespace( pd );
 	while( parser_peek( pd ) != ')' ){
-		delay(0);
 		// check that we haven't read too many arguments
 		if( *num_args >= PARSER_MAX_ARGUMENT_COUNT )
 			parser_error( pd, PSTR("Exceeded maximum argument count for function call, increase PARSER_MAX_ARGUMENT_COUNT and recompile!" ));
 		
 		// read the argument and add it to the list of arguments
-		r = parser_read_expr( pd, &args[*num_args], &args_str[*num_args] );
+		String ss = "";
+		//r = parser_read_expr( pd, &args[*num_args], &ss );
+		r = parser_read_expr( pd, &args[*num_args], ss );
 		// here we try to characterize each element; we could add another array to store the kind of argument available (Double or String)
 		// but we can simply put a nan when the arg is a String and a '\0' when the arg is a Number
-		if (r == PARSER_STRING)
+ 		if (r == PARSER_STRING)
+		{
 			args[*num_args] = sqrt(-1); // nan
+			args_str[*num_args] = new String(ss);
+		}
 		else
-			args_str[*num_args] = "\0";	// it's a char. Should be a string? "\0" ?
-
+			args_str[*num_args] = NULL;	// this means that the arg is not valid!
+ 
 		*num_args = *num_args+1;
 		// eat any following whitespace
 		parser_eat_whitespace( pd );
@@ -289,7 +296,7 @@ int parser_read_argument_list( parser_data *pd, int *num_args, double *args, Str
 #else
 // This is not a C99-compliant compiler - roll our own round function.
 // We'll use a name different from round in case this compiler has a non-standard implementation.
-int parser_round(double x){
+int ICACHE_FLASH_ATTR parser_round(double x){
 	int i = (int) x;
 	if (x >= 0.0) {
 		return ((x-i) >= 0.5) ? (i + 1) : (i);
@@ -299,14 +306,28 @@ int parser_round(double x){
 }
 #endif
 
-int parser_read_builtin( parser_data *pd, double *value, String *str_value ){
-	double v0=0.0, v1=0.0, args[PARSER_MAX_ARGUMENT_COUNT];
-	String v1_str="", args_str[PARSER_MAX_ARGUMENT_COUNT];
-	char c, token[PARSER_MAX_TOKEN_SIZE];
+
+int ICACHE_FLASH_ATTR parser_read_builtin( parser_data *pd, double *value, String &str_value ){
+		
+	char c;
+	char *token;//[PARSER_MAX_TOKEN_SIZE];
 	int num_args, pos=0;
 	int r;
-	delay(0);
+	//double v0=0.0, v1=0.0, args[PARSER_MAX_ARGUMENT_COUNT];
+	double v0, v1;
+	double args[PARSER_MAX_ARGUMENT_COUNT];
+	
+	//double *args = (double*) malloc(PARSER_MAX_ARGUMENT_COUNT*sizeof(double));
+	
+	String v1_str=""; // args_str[PARSER_MAX_ARGUMENT_COUNT];
+	String *args_str[PARSER_MAX_ARGUMENT_COUNT];
+	// put a null for each element; this will permit to recognise the elements created
+	for (int i=0; i<PARSER_MAX_ARGUMENT_COUNT; i++)
+		args_str[i] = NULL;
+
+	token = (char*) malloc(PARSER_MAX_TOKEN_SIZE); // allocate memory 
 	c = parser_peek( pd );
+
 	if( isalpha(c) || c == '_' ){
 		// alphabetic character or underscore, indicates that either a function 
 		// call or variable follows
@@ -315,71 +336,69 @@ int parser_read_builtin( parser_data *pd, double *value, String *str_value ){
 			c = parser_peek( pd );
 		}
 		token[pos] = '\0';
-		
 		// check for an opening bracket, which indicates a function call
 		if( parser_peek(pd) == '(' ){
 			// eat the bracket
 			parser_eat(pd);
-			delay(0);
 			// start handling the specific built-in functions
- 			if( strcmp( token, "pow" ) == 0 ){
+ 			if( strcmp_P( token, PSTR("pow") ) == 0 ){
 				r = parser_read_argument( pd, &v0, str_value );
 				r = parser_read_argument( pd, &v1, str_value );
 				v0 = pow( v0, v1 ); 
- 			} else if( strcmp( token, "sqr" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("sqr") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				if( v0 < 0.0 ) 
  					parser_error( pd, PSTR("sqrt(x) undefined for x < 0!" ));
  				v0 = sqrt( v0 );
- 			} else if( strcmp( token, "log" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("log") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				if( v0 <= 0 )
  					parser_error( pd, PSTR("log(x) undefined for x <= 0!" ));
  				v0 = log( v0 );
- 			} else if( strcmp( token, "exp" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("exp") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				v0 = exp( v0 );
- 			} else if( strcmp( token, "sin" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("sin") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );	
 				if (r == PARSER_STRING)
 					parser_error( pd, PSTR("The argument must be a number!" ));
  				v0 = sin( v0 );
- 			} else if( strcmp( token, "asin" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("asin") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				if( fabs(v0) > 1.0 )
  					parser_error( pd, PSTR("asin(x) undefined for |x| > 1!" ));
  				v0 = asin( v0 );
- 			} else if( strcmp( token, "cos" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("cos") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				v0 = cos( v0 );
- 			} else if( strcmp( token, "acos" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("acos") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				if( fabs(v0 ) > 1.0 )
  					parser_error( pd, PSTR("acos(x) undefined for |x| > 1!" ));
  				v0 = acos( v0 );
- 			} else if( strcmp( token, "tan" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("tan") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );	
  				v0 = tan( v0 );
- 			} else if( strcmp( token, "atan" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("atan") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				v0 = atan( v0 );
- 			} else if( strcmp( token, "atan2" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("atan2") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				r = parser_read_argument( pd, &v1, str_value );
  				v0 = atan2( v0, v1 );
- 			} else if( strcmp( token, "abs" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("abs") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				v0 = abs( (int)v0 );
- 			} else if( strcmp( token, "fabs" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("fabs") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				v0 = fabs( v0 );
- 			} else if( strcmp( token, "floor" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("floor") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				v0 = floor( v0 );
- 			} else if( strcmp( token, "ceil" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("ceil") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  				v0 = floor( v0 );
- 			} else if( strcmp( token, "round" ) == 0 ){
+ 			} else if( strcmp_P( token, PSTR("round") ) == 0 ){
  				r = parser_read_argument( pd, &v0, str_value );
  #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
  				// This is a C99 compiler - use the built-in round function.
@@ -390,12 +409,18 @@ int parser_read_builtin( parser_data *pd, double *value, String *str_value ){
  #endif
 		 } else {
 				r = parser_read_argument_list( pd, &num_args, args, args_str);
+				delay(0);
 				if( pd->function_cb && (r = pd->function_cb( pd->user_data, token, num_args, args, &v1, args_str, &v1_str)) ){
 					v0 = v1;
-					*str_value = v1_str;
+					str_value = v1_str;
 				} else {
 					parser_error( pd, PSTR("Tried to call unknown built-in function!" ));
 				}
+				// delete all allocated String arguments
+				for (int i=0; i<num_args; i++)
+					delete args_str[i];	
+				// free the allocated memory
+				//free(args);
 			}
 		
 			// eat closing bracket of function call
@@ -403,9 +428,9 @@ int parser_read_builtin( parser_data *pd, double *value, String *str_value ){
 				parser_error( pd, PSTR("Expected ')' in built-in call!" ));
 		} else {
 			// no opening bracket, indicates a variable lookup
-			if( pd->variable_cb != NULL && (r = pd->variable_cb( pd->user_data, token, &v1, args_str, &v1_str )) ){
+			if( pd->variable_cb != NULL && (r = pd->variable_cb( pd->user_data, token, &v1, &v1_str )) ){
 					v0 = v1;
-					*str_value = v1_str;
+					str_value = v1_str;
 			} else {
 				parser_error( pd, PSTR("Could not look up value for variable!" ));
 			}
@@ -415,6 +440,8 @@ int parser_read_builtin( parser_data *pd, double *value, String *str_value ){
 		int r = parser_read_Value( pd, value, str_value);
 		// consume whitespace
 		parser_eat_whitespace( pd );
+		
+		free(token); // free the allocated memory
 		return r;
 	}
 	
@@ -423,13 +450,15 @@ int parser_read_builtin( parser_data *pd, double *value, String *str_value ){
 	
 	*value = v0;
 	// return the status
+	
+	free(token); // free the allocated memory
 	return r;
 }
 
-int parser_read_paren( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_paren( parser_data *pd, double *value, String &str_value ){
 	double val;
 	int r;
-	delay(0);
+
 	// check if the expression has a parenthesis
 	if( parser_peek( pd ) == '(' ){
 		// eat the character
@@ -464,12 +493,12 @@ int parser_read_paren( parser_data *pd, double *value, String *str_value ){
 	return r;
 }
 
-int parser_read_unary( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_unary( parser_data *pd, double *value, String &str_value ){
 	char c;
 	int r;
 	double v0;
-	delay(0);
 	c = parser_peek( pd );
+
 	if( c == '!' ){
 		// if the first character is a '!', perform a boolean not operation
 #if !defined(PARSER_EXCLUDE_BOOLEAN_OPS)
@@ -500,10 +529,10 @@ int parser_read_unary( parser_data *pd, double *value, String *str_value ){
 	return r;
 }
 
-int parser_read_power( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_power( parser_data *pd, double *value, String &str_value ){
 	double v0, v1=1.0, s=1.0;
 	int r;
-	delay(0);
+
 	// read the first operand
 	r = parser_read_unary( pd, &v0, str_value );
 	
@@ -544,11 +573,10 @@ int parser_read_power( parser_data *pd, double *value, String *str_value ){
 	return r;
 }
 
-int parser_read_term( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_term( parser_data *pd, double *value, String &str_value ){
 	double v0, v1;
 	char c;
 	int r;
-	delay(0);
 	// read the first operand
 	//v0 = parser_read_power( pd );
 	r = parser_read_power( pd, &v0, str_value );
@@ -601,12 +629,11 @@ int parser_read_term( parser_data *pd, double *value, String *str_value ){
 	return r;
 }
 
-int parser_read_expr( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_expr( parser_data *pd, double *value, String &str_value ){
 	double v0 = 0.0;
 	double v1;
 	char c;
 	int r;
-	delay(0);
 	// handle unary minus
 	c = parser_peek( pd );
 	if( c == '+' || c == '-' ){
@@ -644,12 +671,12 @@ int parser_read_expr( parser_data *pd, double *value, String *str_value ){
 		if( c == '+' )
 		{	
 			int r0 = r;
-			String s0 = *str_value;
+			String s0 = str_value;
 			r = parser_read_term( pd, &v1, str_value );
 			v0 +=v1;
 			// if both arguments are string, the result will be a string
 			if ((r0 == PARSER_STRING) && (r == PARSER_STRING))
-				*str_value = s0 + *str_value;
+				str_value = s0 + str_value;
 		} 
 		else if( c == '-' )
 			{
@@ -673,11 +700,10 @@ int parser_read_expr( parser_data *pd, double *value, String *str_value ){
 
 
 
-int parser_read_boolean_comparison( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_boolean_comparison( parser_data *pd, double *value, String &str_value ){
 	char c, oper[] = { '\0', '\0', '\0' };
 	double v0, v1;
 	int r;
-	delay(0);
 	// eat whitespace
 	parser_eat_whitespace( pd );
 	
@@ -727,11 +753,10 @@ int parser_read_boolean_comparison( parser_data *pd, double *value, String *str_
 	return r;
 }
 
-int parser_read_boolean_equality( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_boolean_equality( parser_data *pd, double *value, String &str_value ){
 	char c, oper[] = { '\0', '\0', '\0' };
 	double v0, v1;
 	int r;
-	delay(0);
 	// eat whitespace
 	parser_eat_whitespace( pd );
 	
@@ -765,7 +790,7 @@ int parser_read_boolean_equality( parser_data *pd, double *value, String *str_va
 		parser_eat_whitespace( pd );
 		
 		// try to read the next term
-		String s0 = *str_value;
+		String s0 = str_value;
 		int r1 = r;
 		r = parser_read_boolean_comparison( pd, &v1, str_value );
 		if (r1 != r)
@@ -775,7 +800,7 @@ int parser_read_boolean_equality( parser_data *pd, double *value, String *str_va
 		{
 			if (r == PARSER_STRING)
 			{
-				v0 = (s0 == *str_value);
+				v0 = (s0 == str_value);
 				r = PARSER_TRUE;
 			}
 			else
@@ -786,7 +811,7 @@ int parser_read_boolean_equality( parser_data *pd, double *value, String *str_va
 			{
 				if (r == PARSER_STRING)
 				{
-					v0 = (s0 != *str_value);
+					v0 = (s0 != str_value);
 					r = PARSER_TRUE;
 				}
 				else
@@ -805,11 +830,10 @@ int parser_read_boolean_equality( parser_data *pd, double *value, String *str_va
 }
 
 
-int parser_read_boolean_and( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_boolean_and( parser_data *pd, double *value, String &str_value ){
 	char c;
 	double v0, v1;
 	int r;
-	delay(0);
 	// tries to read a boolean comparison operator ( <, >, <=, >= ) 
 	// as the first operand of the expression
 	r = parser_read_boolean_equality( pd, &v0, str_value );
@@ -850,11 +874,10 @@ int parser_read_boolean_and( parser_data *pd, double *value, String *str_value )
 	return r;
 }
 
-int parser_read_boolean_or( parser_data *pd, double *value, String *str_value ){
+int ICACHE_FLASH_ATTR parser_read_boolean_or( parser_data *pd, double *value, String &str_value ){
 	char c;
 	double v0, v1;
 	int r;
-	delay(0);
 	// read the first term
 	r = parser_read_boolean_and( pd, &v0, str_value );
 	
