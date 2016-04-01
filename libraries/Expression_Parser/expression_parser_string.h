@@ -40,9 +40,16 @@
 	- Introduction of String arguments literals (string between double quotes), variables and functions
 	- Introduction of the Operator '+' for the strings (sum of 2 strings)
 	- Introduction of the '==' (equal) and '!=' (not equal) comparators for strings
+	- Introduction of the '>>' (shift right) and '<<' operator; the arguemtns are converted to integer
+	- Introduction of the "basic syntax" comparaison operators "<>", "="
+	- Introduction of PARSER_PREC definition that can be float or double; determine the math precision of the parser
+	- Introduction of the full comparaisons between strings ; now the 'C' and 'Basic' syntax co-exists
+	- Introduction of the "Basic syntax" boolean operators (and, or, not); ; now the 'C' and 'Basic' syntax co-exists
+	- Introduction of the binary operators "and" and "or" ; ex a = 255 and 16 (or a = 240 or 15)
+	- Introduction of the | string literal; you can use now " or | permitting to include | or " into strings
+	- Introduction of the xor binary operator
 	TBD : more control on the kind (string or number) for the arguments
 		: more operators on strings
-		: more comparators on strings
  */
 
 #include<setjmp.h>
@@ -75,9 +82,16 @@ using namespace std;
 /**
  @brief definitions for parser true and false or String
 */
-#define PARSER_FALSE 0
-#define PARSER_TRUE  (!PARSER_FALSE)
+#define PARSER_FALSE 	0
+#define PARSER_TRUE  	1
 #define PARSER_STRING	2
+
+/**
+ @brief definitions for math precision (double or float)
+*/
+#if !defined(PARSER_PREC)
+#define PARSER_PREC	float
+#endif
 
 /**
  @brief user-defined variable callback function. see expression_parser.h for more details.
@@ -89,7 +103,7 @@ using namespace std;
  PARSER_STRING if the variable exists and value was set by the callback with the string result stored in value_str or
  PARSER_FALSE otherwise.
 */ 
-typedef int (*parser_variable_callback)( void *user_data, const char *name, double *value, String *value_str  );
+typedef int (*parser_variable_callback)( void *user_data, const char *name, PARSER_PREC *value, String *value_str  );
 
 /**
  @brief user-defined function callback. see expression_parser.h for more details.
@@ -104,7 +118,7 @@ typedef int (*parser_variable_callback)( void *user_data, const char *name, doub
          PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
 */
-typedef int (*parser_function_callback)( void *user_data, const char *name, const int num_args, const double *args, double *value, String **args_str, String *value_str  );
+typedef int (*parser_function_callback)( void *user_data, const char *name, const int num_args, const PARSER_PREC *args, PARSER_PREC *value, String **args_str, String *value_str  );
 
 /**
  @brief main data structure for the parser, holds a pointer to the input String and the index of the current position of the parser in the input
@@ -145,7 +159,7 @@ typedef struct {
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise
  */
-int parse_expression( const char *expr, double *value, String *str_value );
+int parse_expression( const char *expr, PARSER_PREC *value, String *str_value );
 
 /**
  @brief convenience function for using the library that exposes the callback interface to the variable and function features.  Initializes a parser_data structure on the stack (i.e. no malloc() or free()), sets the appropriate fields and then calls the internal library functions.
@@ -159,7 +173,7 @@ int parse_expression( const char *expr, double *value, String *str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
 */
-int parse_expression_with_callbacks( const char *expr, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data, double *value, String &str_value );
+int parse_expression_with_callbacks( const char *expr, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data, PARSER_PREC *value, String &str_value );
 
 /**
  @brief primary public routine for the library
@@ -170,8 +184,7 @@ int parse_expression_with_callbacks( const char *expr, parser_variable_callback 
          PARSER_STRING if the expression has a string result stored or
 		 PARSER_FALSE otherwise.
  */
-//double parser_parse( parser_data *pd );
-int parser_parse( parser_data *pd, double *value, String &str_value );
+int parser_parse( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief initializes a pre-existing parser_data struture. Use this function to avoid any dynamic memory allocation by the code by passing a pointer to a parser_data structure that has been initialized on the stack.
@@ -229,7 +242,7 @@ void parser_eat_whitespace( parser_data *pd );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
  */
-int parser_read_Value( parser_data *pd, double *value, String &str_value );
+int parser_read_Value( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief reads arguments for the builtin functions, auxilliary function for parser_read_builtin()
@@ -240,7 +253,9 @@ int parser_read_Value( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
  */
-int parser_read_argument( parser_data *pd, double *value, String &str_value );
+int parser_read_argument( parser_data *pd, PARSER_PREC *value, String &str_value );
+
+int parser_read_argument_list( parser_data *pd, int *num_args, PARSER_PREC *args, String **args_str);
 
 /**
  @brief reads and calls built-in functions, like sqrt(.), pow(.), etc.
@@ -251,7 +266,7 @@ int parser_read_argument( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
 */
-int parser_read_builtin( parser_data *pd, double *value, String &str_value );
+int parser_read_builtin( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief attempts to read an expression in parentheses, or failing that a literal value
@@ -262,7 +277,7 @@ int parser_read_builtin( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
  */
-int parser_read_paren( parser_data *pd, double *value, String &str_value );
+int parser_read_paren( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief attempts to read a unary operation, or failing that, a parenthetical or literal value
@@ -273,7 +288,7 @@ int parser_read_paren( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
 */
-int parser_read_unary( parser_data *pd, double *value, String &str_value );
+int parser_read_unary( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief attempts to read an exponentiation operator, or failing that, a parenthetical expression 
@@ -284,7 +299,7 @@ int parser_read_unary( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
  */
-int parser_read_power( parser_data *pd, double *value, String &str_value );
+int parser_read_power( parser_data *pd, PARSER_PREC *value, String &str_value );
 	
 /**
  @brief reads a term in an expression
@@ -295,7 +310,7 @@ int parser_read_power( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
  */
-int parser_read_term( parser_data *pd, double *value, String &str_value );
+int parser_read_term( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief attempts to read an expression
@@ -306,7 +321,7 @@ int parser_read_term( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
  */
-int parser_read_expr( parser_data *pd, double *value, String &str_value );
+int parser_read_expr( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief reads and performs a boolean comparison operations (<,>,<=,>=,==) if found
@@ -317,7 +332,7 @@ int parser_read_expr( parser_data *pd, double *value, String &str_value );
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
  */
-int parser_read_boolean_comparison( parser_data *pd, double *value, String &str_value );
+int parser_read_boolean_comparison( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 /**
  @brief reads and performs a boolean 'and' operation (if found)
@@ -328,7 +343,7 @@ int parser_read_boolean_comparison( parser_data *pd, double *value, String &str_
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
 */
-int parser_read_boolean_and( parser_data *pd, double *value, String &str_value );
+int parser_read_boolean_and( parser_data *pd, PARSER_PREC *value, String &str_value );
 	
 /**
  @brief reads and performs a boolean or operation (if found)
@@ -339,7 +354,14 @@ int parser_read_boolean_and( parser_data *pd, double *value, String &str_value )
 		 PARSER_STRING if the function exists and was evaluated successfully with the string result stored in value_str or
 		 PARSER_FALSE otherwise.
 */
-int parser_read_boolean_or( parser_data *pd, double *value, String &str_value );
+int parser_read_boolean_or( parser_data *pd, PARSER_PREC *value, String &str_value );
 
 
+/**
+ @brief Convert a float to string with 5 decimals and then removes the trailing zeros (and eventually the '.')
+ @param[in] value to be converted (double precision number)
+ @param[out] return expression value (string)
+ @return converted value (string)
+*/
+String FloatToString(PARSER_PREC d);
 #endif

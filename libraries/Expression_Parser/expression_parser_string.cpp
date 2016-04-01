@@ -1,14 +1,9 @@
-#include<math.h>
-//#include<ctype.h>
-#include<stdio.h>
-#include<String.h>
-#include<stdlib.h>
-//#include<c_types.h> 
-//#include "ets_sys.h"
-//#include "osapi.h"
-//#include <pgmspace.h>
-#include "spiffs/spiffs.h"
-#include <FS.h>
+#include <math.h>
+#include <stdio.h>
+#include <String.h>
+#include <stdlib.h>
+
+#include <arduino.h>
 
 /**
  @file expression_parser.c
@@ -21,29 +16,25 @@
 */
 using namespace std;
 
-//#include <iostream>
-//#include <String>
-
-#include"expression_parser_string.h"
-extern bool  _parser_failed;
 extern char* _parser_error_msg;
 
-/*  int ICACHE_FLASH_ATTR parse_expression( const char *expr, double *value, String *value_str )
+#include "expression_parser_string.h"
+
+int ICACHE_FLASH_ATTR parse_expression( const char *expr, PARSER_PREC *value, String &value_str )
  {
  	return parse_expression_with_callbacks( expr, NULL, NULL, NULL, value, value_str );
  }
- */
-int ICACHE_FLASH_ATTR parse_expression_with_callbacks( const char *expr, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data, double *value, String &str_value ){
+
+int ICACHE_FLASH_ATTR parse_expression_with_callbacks( const char *expr, parser_variable_callback variable_cb, parser_function_callback function_cb, void *user_data, PARSER_PREC *value, String &str_value ){
 	int r;
 	parser_data pd;
-  _parser_failed = false;
 	parser_data_init( &pd, expr, variable_cb, function_cb, user_data );
-	//r = parser_parse( &pd, &val, &str );
 	r = parser_parse( &pd, value, str_value );
 	if( pd.error ){
 		//printf("Error: %s\n", pd.error );
 		//printf("Expression '%s' failed to parse, returning nan\n", expr );
 	}
+	_parser_error_msg = (char *) pd.error;
 	return r;	  
 }
 
@@ -59,8 +50,8 @@ int ICACHE_FLASH_ATTR parser_data_init( parser_data *pd, const char *str, parser
 }
 
 
-int ICACHE_FLASH_ATTR parser_parse( parser_data *pd, double *value, String &str_value ){
-    //double result = 0.0;
+int ICACHE_FLASH_ATTR parser_parse( parser_data *pd, PARSER_PREC *value, String &str_value ){
+    //PARSER_PREC result = 0.0;
 	int r;
 	// set the jump position and launch the parser
 	//if( !setjmp( pd->err_jmp_buf ) ){
@@ -93,8 +84,6 @@ int ICACHE_FLASH_ATTR parser_parse( parser_data *pd, double *value, String &str_
 									   
 void ICACHE_FLASH_ATTR parser_error( parser_data *pd, const char *err ){
 	pd->error = err;
-	_parser_failed = true;
-	_parser_error_msg = (char *) err;
 	//longjmp( pd->err_jmp_buf, 1);
 }
 
@@ -130,11 +119,11 @@ delay(0);
 		parser_eat( pd );
 }
 
-int ICACHE_FLASH_ATTR parser_read_Value( parser_data *pd, double *value, String &str_value ){
+int ICACHE_FLASH_ATTR parser_read_Value( parser_data *pd, PARSER_PREC *value, String &str_value ){
 	char c;
 	char *token; //[PARSER_MAX_TOKEN_SIZE];
 	int pos=0;
-	//double val=0.0;
+	//PARSER_PREC val=0.0;
 	*value = 0.0;
 	token = (char*) malloc(PARSER_MAX_TOKEN_SIZE); // allocate memory 
 	
@@ -188,17 +177,18 @@ int ICACHE_FLASH_ATTR parser_read_Value( parser_data *pd, double *value, String 
 	{
 		//parser_error( pd, "Failed to read real number" );
 																						      //printf("Failed to read real number" );
-		// now try to analyze if is a String
+		// now try to analyze if is a string;
+		//the string is defined as the text between " or | using | you can put " inside strings (and vice-versa)
 		// read a leading sign
 		c = parser_peek( pd );
-		if( c == '"' )
+		if( c == '"' || c == '|')
 			parser_eat( pd );
 
-		// read optional chars until next "
-		while( parser_peek(pd) != '"' )
+		// read optional chars until next " or |
+		while( parser_peek(pd) != c )
 			token[pos++] = parser_eat( pd );
 
-		// consume the final "
+		// consume the final " or |
 		parser_eat( pd );
 		token[pos] = '\0';
 		// return the parsed value
@@ -214,7 +204,7 @@ int ICACHE_FLASH_ATTR parser_read_Value( parser_data *pd, double *value, String 
 	// return the status
 	return PARSER_TRUE;
 }
-int ICACHE_FLASH_ATTR parser_read_argument( parser_data *pd, double *value, String &str_value ){
+int ICACHE_FLASH_ATTR parser_read_argument( parser_data *pd, PARSER_PREC *value, String &str_value ){
 	char c;
 	int r;
 	// eat leading whitespace
@@ -239,7 +229,7 @@ int ICACHE_FLASH_ATTR parser_read_argument( parser_data *pd, double *value, Stri
 
 }
 
-int ICACHE_FLASH_ATTR parser_read_argument_list( parser_data *pd, int *num_args, double *args, String **args_str){
+int ICACHE_FLASH_ATTR parser_read_argument_list( parser_data *pd, int *num_args, PARSER_PREC *args, String **args_str){
 	char c;
 	int r = PARSER_FALSE; // in case the argument is empty as fun(), the return value will be PARSER_FALSE
 	// set the initial number of arguments to zero
@@ -296,7 +286,7 @@ int ICACHE_FLASH_ATTR parser_read_argument_list( parser_data *pd, int *num_args,
 #else
 // This is not a C99-compliant compiler - roll our own round function.
 // We'll use a name different from round in case this compiler has a non-standard implementation.
-int ICACHE_FLASH_ATTR parser_round(double x){
+int ICACHE_FLASH_ATTR parser_round(PARSER_PREC x){
 	int i = (int) x;
 	if (x >= 0.0) {
 		return ((x-i) >= 0.5) ? (i + 1) : (i);
@@ -307,17 +297,17 @@ int ICACHE_FLASH_ATTR parser_round(double x){
 #endif
 
 
-int ICACHE_FLASH_ATTR parser_read_builtin( parser_data *pd, double *value, String &str_value ){
+int ICACHE_FLASH_ATTR parser_read_builtin( parser_data *pd, PARSER_PREC *value, String &str_value ){
 		
 	char c;
 	char *token;//[PARSER_MAX_TOKEN_SIZE];
 	int num_args, pos=0;
 	int r;
-	//double v0=0.0, v1=0.0, args[PARSER_MAX_ARGUMENT_COUNT];
-	double v0, v1;
-	double args[PARSER_MAX_ARGUMENT_COUNT];
+	//PARSER_PREC v0=0.0, v1=0.0, args[PARSER_MAX_ARGUMENT_COUNT];
+	PARSER_PREC v0 = 0.0, v1 = 1.0;
+	PARSER_PREC args[PARSER_MAX_ARGUMENT_COUNT];
 	
-	//double *args = (double*) malloc(PARSER_MAX_ARGUMENT_COUNT*sizeof(double));
+	//PARSER_PREC *args = (PARSER_PREC*) malloc(PARSER_MAX_ARGUMENT_COUNT*sizeof(PARSER_PREC));
 	
 	String v1_str=""; // args_str[PARSER_MAX_ARGUMENT_COUNT];
 	String *args_str[PARSER_MAX_ARGUMENT_COUNT];
@@ -455,8 +445,8 @@ int ICACHE_FLASH_ATTR parser_read_builtin( parser_data *pd, double *value, Strin
 	return r;
 }
 
-int ICACHE_FLASH_ATTR parser_read_paren( parser_data *pd, double *value, String &str_value ){
-	double val;
+int ICACHE_FLASH_ATTR parser_read_paren( parser_data *pd, PARSER_PREC *value, String &str_value ){
+	PARSER_PREC val;
 	int r;
 
 	// check if the expression has a parenthesis
@@ -493,21 +483,30 @@ int ICACHE_FLASH_ATTR parser_read_paren( parser_data *pd, double *value, String 
 	return r;
 }
 
-int ICACHE_FLASH_ATTR parser_read_unary( parser_data *pd, double *value, String &str_value ){
+int ICACHE_FLASH_ATTR parser_read_unary( parser_data *pd, PARSER_PREC *value, String &str_value ){
 	char c;
 	int r;
-	double v0;
+	PARSER_PREC v0;
 	c = parser_peek( pd );
-
-	if( c == '!' ){
+	if ( ( c == '!' ) || (strncmp_P(&pd->str[pd->pos], PSTR("not"), 3) == 0) ){
 		// if the first character is a '!', perform a boolean not operation
 #if !defined(PARSER_EXCLUDE_BOOLEAN_OPS)
+		if (c == 'n')
+		{
+			// 'not' is found. Remove 2 chars
+			pd->pos += 2;
+		}
 		parser_eat(pd);
 		parser_eat_whitespace(pd);
 		r = parser_read_paren(pd, &v0, str_value);
-		v0 = fabs(v0) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD ? 0.0 : 1.0;
+//		v0 = fabs(v0) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD ? 0.0 : 1.0;
+
+		// define a more "global" way to work; a binary 'not' is done on the operator
+		// this will permit to cover the comparaison and also the binary 'not' operator
+		v0 = ~((int) v0);
+
 #else
-		parser_error( pd, PSTR("Expected '+' or '-' for unary expression, got '!'" ));
+		parser_error( pd, PSTR("Expected '+' or '-' for unary expression, got '!' or 'not'" ));
 #endif
 	} else if( c == '-' ){
 		// perform unary negation
@@ -529,8 +528,8 @@ int ICACHE_FLASH_ATTR parser_read_unary( parser_data *pd, double *value, String 
 	return r;
 }
 
-int ICACHE_FLASH_ATTR parser_read_power( parser_data *pd, double *value, String &str_value ){
-	double v0, v1=1.0, s=1.0;
+int ICACHE_FLASH_ATTR parser_read_power( parser_data *pd, PARSER_PREC *value, String &str_value ){
+	PARSER_PREC v0, v1=1.0, s=1.0;
 	int r;
 
 	// read the first operand
@@ -573,8 +572,8 @@ int ICACHE_FLASH_ATTR parser_read_power( parser_data *pd, double *value, String 
 	return r;
 }
 
-int ICACHE_FLASH_ATTR parser_read_term( parser_data *pd, double *value, String &str_value ){
-	double v0, v1;
+int ICACHE_FLASH_ATTR parser_read_term( parser_data *pd, PARSER_PREC *value, String &str_value ){
+	PARSER_PREC v0, v1;
 	char c;
 	int r;
 	// read the first operand
@@ -585,7 +584,7 @@ int ICACHE_FLASH_ATTR parser_read_term( parser_data *pd, double *value, String &
 	parser_eat_whitespace( pd );
 	
 	// check to see if the next character is a
-	// multiplication, division or modulo operand
+	// multiplication, division, modulo operand (%) or shift left/right (<< or >>)
 	c = parser_peek( pd );
 	while( c == '*' || c == '/' || c == '%' ||
 		  (c == '<' && parser_peek_n(pd,1) == '<') || (c == '>' && parser_peek_n(pd,1) == '>') )
@@ -629,11 +628,12 @@ int ICACHE_FLASH_ATTR parser_read_term( parser_data *pd, double *value, String &
 	return r;
 }
 
-int ICACHE_FLASH_ATTR parser_read_expr( parser_data *pd, double *value, String &str_value ){
-	double v0 = 0.0;
-	double v1;
+int ICACHE_FLASH_ATTR parser_read_expr( parser_data *pd, PARSER_PREC *value, String &str_value ){
+	PARSER_PREC v0 = 0.0;
+	PARSER_PREC v1;
 	char c;
-	int r;
+	int r, r0;
+	String s0;
 	// handle unary minus
 	c = parser_peek( pd );
 	if( c == '+' || c == '-' ){
@@ -659,8 +659,8 @@ int ICACHE_FLASH_ATTR parser_read_expr( parser_data *pd, double *value, String &
 	
 	// check if there is an addition or
 	// subtraction operation following
-	c = parser_peek( pd );
-	while( c == '+' || c == '-' ){
+	c = parser_peek( pd );			/* match & but not &&                   */
+	while( c == '+' || c == '-'  || (c == '&' && parser_peek_n(pd, 1) != '&') ){ 
 		// advance the input
 		parser_eat( pd );
 		
@@ -670,13 +670,50 @@ int ICACHE_FLASH_ATTR parser_read_expr( parser_data *pd, double *value, String &
 		// perform the operation
 		if( c == '+' )
 		{	
-			int r0 = r;
-			String s0 = str_value;
+			r0 = r;
+			s0 = str_value;
 			r = parser_read_term( pd, &v1, str_value );
-			v0 +=v1;
-			// if both arguments are string, the result will be a string
-			if ((r0 == PARSER_STRING) && (r == PARSER_STRING))
-				str_value = s0 + str_value;
+			/*		uncomment this part to permit to use the '+' operator also for the strings	
+			// if one of the arguments is string, the result will be a string
+			if ((r0 == PARSER_STRING) || (r == PARSER_STRING))
+			{
+				if (r == PARSER_TRUE)
+					str_value = s0 + FloatToString(v1);
+				else
+					if (r0 == PARSER_TRUE)
+						str_value = FloatToString(v0) + str_value;
+					else
+						str_value =  s0 + str_value;
+				r = PARSER_STRING;
+			}
+			else  // else the result is the numerical sum
+			*/
+				v0 +=v1;
+			r = PARSER_TRUE; // this needs to be removed if the '+' for strings is required
+		} 
+		else if ( c == '&' )
+			{
+				r0 = r;
+				s0 = str_value;
+				r = parser_read_term( pd, &v1, str_value );
+				// if one of the arguments is string, the result will be a string
+				if ((r0 == PARSER_STRING) || (r == PARSER_STRING))
+				{
+					if (r == PARSER_TRUE)
+						str_value = s0 +  FloatToString(v1);
+					else
+						if (r0 == PARSER_TRUE)
+							str_value =  FloatToString(v0) + str_value;
+						else
+							str_value =  s0 + str_value;
+					r = PARSER_STRING;
+				}
+				else
+				{
+					// these are Numeric terms so, we will add as they were strings
+					str_value = FloatToString(v0) + FloatToString(v1);
+					r = PARSER_STRING;
+				}
 		} 
 		else if( c == '-' )
 			{
@@ -700,9 +737,9 @@ int ICACHE_FLASH_ATTR parser_read_expr( parser_data *pd, double *value, String &
 
 
 
-int ICACHE_FLASH_ATTR parser_read_boolean_comparison( parser_data *pd, double *value, String &str_value ){
+int ICACHE_FLASH_ATTR parser_read_boolean_comparison( parser_data *pd, PARSER_PREC *value, String &str_value ){
 	char c, oper[] = { '\0', '\0', '\0' };
-	double v0, v1;
+	PARSER_PREC v0, v1;
 	int r;
 	// eat whitespace
 	parser_eat_whitespace( pd );
@@ -720,7 +757,7 @@ int ICACHE_FLASH_ATTR parser_read_boolean_comparison( parser_data *pd, double *v
 	// evaluate to true, since (2.0 < 3.0) == 1.0, which is less than 1.5, even
 	// though the 3.0 < 1.5 does not hold.
 	c = parser_peek( pd );
-	if( c == '>' || c == '<' ){
+	if ( (c == '>' || c == '<') && (strncmp_P(&pd->str[pd->pos], PSTR("<>"), 2) != 0) ){  // only > >= < <= not <>
 		// read the operation
 		oper[0] = parser_eat( pd );
 		c = parser_peek( pd );
@@ -731,21 +768,47 @@ int ICACHE_FLASH_ATTR parser_read_boolean_comparison( parser_data *pd, double *v
 		parser_eat_whitespace( pd );
 		
 		// try to read the next term
+		int r0 = r;
+		String s0 = str_value;
+
 		r = parser_read_expr( pd,  &v1, str_value);
-		
-		// perform the boolean operations
-		if( strcmp( oper, "<" ) == 0 ){
-			v0 = (v0 < v1) ? 1.0 : 0.0;
-		} else if( strcmp( oper, ">" ) == 0 ){
-			v0 = (v0 > v1) ? 1.0 : 0.0;
-		} else if( strcmp( oper, "<=" ) == 0 ){
-			v0 = (v0 <= v1) ? 1.0 : 0.0;
-		} else if( strcmp( oper, ">=" ) == 0 ){
-			v0 = (v0 >= v1) ? 1.0 : 0.0;
-		} else {
-			parser_error( pd, PSTR("Unknown operation!" ));
+			
+		// if both the arguments are numerical
+		if ((r0 == PARSER_TRUE) || (r == PARSER_TRUE))
+		{
+			// perform the boolean operations
+			if( strcmp_P( oper, PSTR("<") ) == 0 ){
+			v0 = (v0 < v1) ? -1.0 : 0.0;
+			} else if( strcmp_P( oper, PSTR(">") ) == 0 ){
+			v0 = (v0 > v1) ? -1.0 : 0.0;
+			} else if( strcmp_P( oper, PSTR("<=") ) == 0 ){
+			v0 = (v0 <= v1) ? -1.0 : 0.0;
+			} else if( strcmp_P( oper, PSTR(">=") ) == 0 ){
+			v0 = (v0 >= v1) ? -1.0 : 0.0;
+			} else {
+				parser_error( pd, PSTR("Unknown operation!" ));
+			}
 		}
-		
+		else
+			if ((r0 == PARSER_STRING) && (r == PARSER_STRING))
+			{
+				// perform the boolean operations
+				if( strcmp_P( oper, PSTR("<") ) == 0 ){
+					v0 = (s0 < str_value) ? -1.0 : 0.0;
+				} else if( strcmp_P( oper, PSTR(">") ) == 0 ){
+					v0 = (s0 > str_value) ? -1.0 : 0.0;
+				} else if( strcmp_P( oper, PSTR("<=") ) == 0 ){
+					v0 = (s0 <= str_value) ? -1.0 : 0.0;
+				} else if( strcmp_P( oper, PSTR(">=") ) == 0 ){
+					v0 = (s0 >= str_value) ? -1.0 : 0.0;
+				} else {
+					parser_error( pd, PSTR("Unknown operation!" ));
+				}	
+				r = PARSER_TRUE;
+			}
+			else
+				parser_error( pd, PSTR("Comparaison between string and number!" ));
+				
 		// read trailing whitespace
 		parser_eat_whitespace( pd );
 	}
@@ -753,9 +816,9 @@ int ICACHE_FLASH_ATTR parser_read_boolean_comparison( parser_data *pd, double *v
 	return r;
 }
 
-int ICACHE_FLASH_ATTR parser_read_boolean_equality( parser_data *pd, double *value, String &str_value ){
+int ICACHE_FLASH_ATTR parser_read_boolean_equality( parser_data *pd, PARSER_PREC *value, String &str_value ){
 	char c, oper[] = { '\0', '\0', '\0' };
-	double v0, v1;
+	PARSER_PREC v0, v1;
 	int r;
 	// eat whitespace
 	parser_eat_whitespace( pd );
@@ -768,7 +831,7 @@ int ICACHE_FLASH_ATTR parser_read_boolean_equality( parser_data *pd, double *val
 	
 	// try to perform boolean equality operator
 	c = parser_peek( pd );
-	if( c == '=' || c == '!' ){
+	if ( (c == '=' || c == '!' ) || (strncmp_P(&pd->str[pd->pos], PSTR("<>"), 2) == 0) ){
 		if( c == '!' ){
 			// try to match '!=' without advancing input to not clobber unary not
 			if( parser_peek_n( pd, 1 ) == '=' ){
@@ -778,12 +841,26 @@ int ICACHE_FLASH_ATTR parser_read_boolean_equality( parser_data *pd, double *val
 				*value = v0;
 				return r;
 			}
+		} else 
+			if( c == '<' ){
+				// try to match '<>' without advancing input to not clobber unary not
+				if( parser_peek_n( pd, 1 ) == '>' ){
+					oper[0] = parser_eat( pd );
+					oper[1] = parser_eat( pd );
 		} else {
-			// try to match '=='
+					*value = v0;
+					return r;
+				}
+			} else {		
+				// try to match '==' or the "basic language" '='
 			oper[0] = parser_eat( pd );
 			c = parser_peek( pd );
 			if( c != '=' )
-				parser_error( pd, PSTR("Expected a '=' for boolean '==' operator!" ));
+			{
+				//parser_error( pd, PSTR("Expected a '=' for boolean '==' operator!" ));
+				// this is a 'basic language' = operator; we trick it going back to the previous '='
+					pd->pos--;
+			}
 			oper[1] = parser_eat( pd );
 		}
 		// eat trailing whitespace
@@ -796,26 +873,26 @@ int ICACHE_FLASH_ATTR parser_read_boolean_equality( parser_data *pd, double *val
 		if (r1 != r)
 			parser_error( pd, PSTR("Comparaison between string and number!" ));
 		// perform the boolean operations
-		if( strcmp( oper, "==" ) == 0 )
+		if( strcmp_P( oper, PSTR("==") ) == 0 )
 		{
 			if (r == PARSER_STRING)
 			{
-				v0 = (s0 == str_value);
+				v0 = (s0 == str_value) ? -1.0 : 0.0;
 				r = PARSER_TRUE;
 			}
 			else
-				v0 = ( fabs(v0 - v1) < PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? 1.0 : 0.0;
+				v0 = ( fabs(v0 - v1) < PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? -1.0 : 0.0;
 		} 
 		else 
-			if( strcmp( oper, "!=" ) == 0 )
+			if( (strcmp_P( oper, PSTR("!=") ) == 0 ) || (strcmp_P( oper, PSTR("<>") ) == 0 ) )
 			{
 				if (r == PARSER_STRING)
 				{
-					v0 = (s0 != str_value);
+					v0 = (s0 != str_value) ? -1.0 : 0.0;
 					r = PARSER_TRUE;
 				}
 				else
-					v0 = ( fabs(v0 - v1) > PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? 1.0 : 0.0;
+					v0 = ( fabs(v0 - v1) > PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? -1.0 : 0.0;
 			} 
 			else 
 			{
@@ -830,9 +907,10 @@ int ICACHE_FLASH_ATTR parser_read_boolean_equality( parser_data *pd, double *val
 }
 
 
-int ICACHE_FLASH_ATTR parser_read_boolean_and( parser_data *pd, double *value, String &str_value ){
+
+int ICACHE_FLASH_ATTR parser_read_boolean_and( parser_data *pd, PARSER_PREC *value, String &str_value ){
 	char c;
-	double v0, v1;
+	PARSER_PREC v0, v1;
 	int r;
 	// tries to read a boolean comparison operator ( <, >, <=, >= ) 
 	// as the first operand of the expression
@@ -845,15 +923,23 @@ int ICACHE_FLASH_ATTR parser_read_boolean_and( parser_data *pd, double *value, S
 	// operation. If so, match and perform and operations until
 	// there are no more to perform
 	c = parser_peek( pd );
-	while( c == '&' ){
+	while( (c == '&') || (strncmp_P(&pd->str[pd->pos], PSTR("and"), 3) == 0) ){
+		if (c == 'a') // means that we found 'and'
+		{
+			// eat the full 'and'
+			pd->pos += 3;
+		}
+		else
+		{
 		// eat the first '&'
 		parser_eat( pd );
-		
 		// check for and eat the second '&'
 		c = parser_peek( pd );
 		if( c != '&' )
-			parser_error( pd, PSTR("Expected '&' to follow '&' in logical and operation!" ));
+				parser_error( pd, "Expected '&' to follow '&' in logical and operation!" );
+			// eat the 2nd '&'
 		parser_eat( pd );
+		}		
 		
 		// eat any remaining whitespace
 		parser_eat_whitespace( pd );
@@ -861,8 +947,12 @@ int ICACHE_FLASH_ATTR parser_read_boolean_and( parser_data *pd, double *value, S
 		// read the second operand of the
 		r = parser_read_boolean_equality( pd, &v1, str_value );
 		
-		// perform the operation, returning 1.0 for TRUE and 0.0 for FALSE
-		v0 = ( fabs(v0) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD && fabs(v1) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? 1.0 : 0.0;
+//		// perform the operation, returning 1.0 for TRUE and 0.0 for FALSE
+//		v0 = ( fabs(v0) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD && fabs(v1) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? 1.0 : 0.0;
+		
+		// define a more "global" way to work; a binary 'and' is done between the 2 operators
+		// this will permit to cover the comparaison and also the binary 'and' operator
+		v0 = ((int) v0) & ((int) v1);
 	
 		// eat any following whitespace
 		parser_eat_whitespace( pd );
@@ -874,9 +964,9 @@ int ICACHE_FLASH_ATTR parser_read_boolean_and( parser_data *pd, double *value, S
 	return r;
 }
 
-int ICACHE_FLASH_ATTR parser_read_boolean_or( parser_data *pd, double *value, String &str_value ){
+int ICACHE_FLASH_ATTR parser_read_boolean_or( parser_data *pd, PARSER_PREC *value, String &str_value ){
 	char c;
-	double v0, v1;
+	PARSER_PREC v0, v1;
 	int r;
 	// read the first term
 	r = parser_read_boolean_and( pd, &v0, str_value );
@@ -884,19 +974,36 @@ int ICACHE_FLASH_ATTR parser_read_boolean_or( parser_data *pd, double *value, St
 	// eat whitespace
 	parser_eat_whitespace( pd );
 
-	// grab the next character and check if it matches an 'or'
+	// grab the next character and check if it matches an 'or' or 'xor'
 	// operation. If so, match and perform and operations until
 	// there are no more to perform
 	c = parser_peek( pd );
-	while( c == '|' ){
-		// match the first '|' character
-		parser_eat( pd );
-		
-		// check for and match the second '|' character
-		c = parser_peek( pd );
-		if( c != '|' )
-			parser_error( pd, PSTR("Expected '|' to follow '|' in logical or operation!" ));
-		parser_eat( pd );
+
+	while( (c == '|') || (strncmp_P(&pd->str[pd->pos], PSTR("or"), 2) == 0) ||
+						 (strncmp_P(&pd->str[pd->pos], PSTR("xor"), 3) == 0) )
+	{
+		if (c == 'o') // means that we found 'or'
+		{
+			// eat the full 'or'
+			pd->pos += 2;
+		}
+		else
+			if (c == 'x') // means that we found 'xor'
+			{
+				// eat the full 'xor'
+				pd->pos += 3;
+			}		
+			else
+			{
+				// match the first '|' character
+				parser_eat( pd );
+				
+				// check for and match the second '|' character
+				c = parser_peek( pd );
+				if( c != '|' )
+					parser_error( pd, PSTR("Expected '|' to follow '|' in logical or operation!" ));
+				parser_eat( pd );
+			}
 		
 		// eat any following whitespace
 		parser_eat_whitespace( pd );
@@ -904,8 +1011,15 @@ int ICACHE_FLASH_ATTR parser_read_boolean_or( parser_data *pd, double *value, St
 		// read the second operand
 		r = parser_read_boolean_and( pd, &v1, str_value );
 	
-		// perform the 'or' operation
-		v0 = ( fabs(v0) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD || fabs(v1) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? 1.0 : 0.0;
+//		// perform the 'or' operation
+//		v0 = ( fabs(v0) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD || fabs(v1) >= PARSER_BOOLEAN_EQUALITY_THRESHOLD ) ? 1.0 : 0.0;
+		
+		// define a more "global" way to work; a binary 'or' is done between the 2 operators
+		// this will permit to cover the comparaison and also the binary 'or' operator
+		if (c != 'x')
+			v0 = ((int) v0) | ((int) v1);	//or
+		else
+			v0 = ((int) v0) ^ ((int) v1);	//xor
 		
 		// eat any following whitespace
 		parser_eat_whitespace( pd );
@@ -919,3 +1033,18 @@ int ICACHE_FLASH_ATTR parser_read_boolean_or( parser_data *pd, double *value, St
 	*value = v0;
 	return r;
 }
+
+String FloatToString(float d)
+{
+  //Convert a float to string with 5 decimals and then removes the trailing zeros (and eventually the '.')
+  String z = String(d, 5);
+  char *p;
+  p = (char*) z.c_str()+ z.length() -1;
+  while (*p == '0')
+  {
+    *p-- = '\0';
+  }
+  if (*p == '.')
+    *p = '\0';
+  return String(z.c_str());
+} 
