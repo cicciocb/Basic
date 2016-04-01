@@ -25,6 +25,11 @@
 
 //Onewire tempture sensor code conntributed by Rotohammer.
 
+//Signnifigant speed improvements submited by cicciocb
+//Uploading of bas files improvement added by cicciocb
+//JSON parsing routine added by cicciocb
+
+
 //#include <ArduinoJson.h>
 #include "spiffs/spiffs.h"
 #include <FS.h>
@@ -68,18 +73,22 @@
 #include <Adafruit_NeoPixel.h>
 
 
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(256, 2, NEO_GRB + NEO_KHZ800);;
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(256, 15, NEO_GRB + NEO_KHZ800);;
 
 //ThingSpeak Stuff
 
 
-const char BasicVersion[] = "ESP Basic 1.82r11_cicciocb";
+const char BasicVersion[] = "ESP Basic 2.0.Alpha 6 CiccioCB";
 
+
+
+
+// The Math precision is defined, by default, inside expression_parser_string.h
+// there is a definition PARSER_PREC that can be double or float
 #include "expression_parser_string.h"
-bool  _parser_failed;
 char* _parser_error_msg;
-String Line_For_Eval;
-double double_value;
+//String Line_For_Eval;
+PARSER_PREC numeric_value;
 String string_value ;
 
 
@@ -96,7 +105,8 @@ int Emailport;
 String EmailSMTPuser;
 String EmailSMTPpassword;
 
-
+// udp client
+WiFiUDP udp;
 
 WiFiClient client;
 ESP8266WebServer server(80);
@@ -119,11 +129,13 @@ PROGMEM const char DropDownListOpptions[] =  R"=====(<option>item</option>)=====
 
 String LastElimentIdTag;
 
-
+PROGMEM const char MobileFreindlyWidth[] = R"=====(<meta name="viewport" content="width=device-width, initial-scale=1.0">)=====";
 
 byte WaitForTheInterpertersResponse = 1;
 
 PROGMEM const char AdminBarHTML[] = R"=====(
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" type="text/css" href="/file?file=skin.css">
 <a href="./vars">[ VARS ]</a> 
 <a href="./edit">[ EDIT ]</a>
 <a href="./run">[ RUN ]</a>
@@ -141,7 +153,8 @@ PROGMEM const char UploadPage[] = R"=====(
 <form id="filelist">
 <input type="submit" value="Delete" name="Delete">
 <input type="submit" value="View" name="View">
-<input type="submit" value="" name="View">
+<input type="submit" value="Edit" name="Edit">
+<input type="submit" value="Rename" name="Rename">
 </form>
 
 <select name="fileName" size="25" form="filelist">*table*</select>
@@ -154,7 +167,7 @@ PROGMEM const char UploadPage[] = R"=====(
 PROGMEM const char EditorPageHTML[] =  R"=====(
 <script src="editor.js"></script>
 <form action='edit' id="usrform">
-<input type="text" name="name" value="*program name*">
+<input type="text" id="FileName" name="name" value="*program name*">
 <input type="submit" value="Open" name="open">
 </form>
 <button onclick="ShowTheFileList()">Files List</button>
@@ -169,7 +182,7 @@ PROGMEM const char editCodeJavaScript[] =  R"=====(
 function SaveTheCode() {
   var textArea = document.getElementById("code");
   var arrayOfLines = textArea.value.split("\n");
-  httpGet("/codein?SaveTheCode=start");
+  httpGet("/codein?SaveTheCode=start&FileName="+document.getElementById("FileName").value);
   httpGet("/codein?SaveTheCode=yes");
   block = 0;
 for (i = 0; i < arrayOfLines.length; i++) 
@@ -177,10 +190,7 @@ for (i = 0; i < arrayOfLines.length; i++)
   x = i + 1;
   if (arrayOfLines[i] != "undefined")
   {
-    arrayOfLines[i] = replaceAll(arrayOfLines[i],"+", "%2B");
-    arrayOfLines[i] = replaceAll(arrayOfLines[i],"&", "%26");
-    arrayOfLines[i] = replaceAll(arrayOfLines[i],"#", "%23");
-  stocca(encodeURI(arrayOfLines[i]));
+    stocca(encodeURIComponent(arrayOfLines[i]));
     document.getElementById("Status").value = i.toString();
   }
 }
@@ -292,6 +302,10 @@ String ButtonsInUse[11];
 String   msgbranch;
 String   MsgBranchRetrnData;
 
+int UdpBranchLine = 0;
+String  UdpBuffer = "";
+IPAddress UdpRemoteIP;
+int UdpRemotePort;
 
 // Buffer to store incoming commands from serial port
 String inData;
@@ -321,7 +335,7 @@ int GraphicsEliments[100][7];
 File fsUploadFile;
 
 int noOfLinesForEdit;
-String ProgramName = "default";
+String ProgramName = "/default.bas";
 
 bool fileOpenFail;
 
@@ -372,8 +386,6 @@ void setup() {
   PrintAndWebOut(BasicVersion);
 
   //CheckWaitForRunningCode();
-
-
 
   server.on("/", []()
   {
@@ -463,54 +475,60 @@ void setup() {
       //String ProgramName;
       //WebOut = String("<form action='input'>" + HTMLout + "</form>");
       WebOut = String(EditorPageHTML);
-      
+
       if ( server.arg("open") == F("Open") )
       {
         // really takes just the name for the new file otherwise it uses the previous one
-        ProgramName = server.arg("name");
-        LoadBasicProgramFromFlash(String(F("uploads/"))+ ProgramName + String(F(".bas")));
+        ProgramName = GetRidOfurlCharacters(server.arg("name"));
+        ProgramName.trim();
+        if (ProgramName == "")
+        {
+          ProgramName = F("/default.bas");
+        }
+        ProgramName  = MakeSureFileNameStartsWithSlash(ProgramName );
+        LoadBasicProgramFromFlash( ProgramName);
       }
       // the goal here is to replace the server send function by an equivalent that
       // permit to handle big buffers; this is acheived using the "chunked transfer"
       WebOut = String(EditorPageHTML);
       WebOut = WebOut.substring(0, WebOut.indexOf(F("*program txt*")) );
       WebOut.replace(F("*program name*"), ProgramName);
-      
+
       server.sendContent(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection:close\r\nTransfer-Encoding: chunked\r\nAccess-Control-Allow-Origin: *\r\n\r\n"));
       delay(0);
       // each "chunk" is composed of :
       // the size of the block (in hex) terminated by \r\n
-      server.sendContent(String(String(AdminBarHTML).length(), 16) + CRLF); 
+      server.sendContent(String(String(AdminBarHTML).length(), 16) + CRLF);
       // the block terminated by \r\n
       server.sendContent(String(AdminBarHTML) + CRLF);
       /////// end of first chunk ///////////
       delay(0);
-      server.sendContent(String(WebOut.length(), 16) + CRLF);   
+      server.sendContent(String(WebOut.length(), 16) + CRLF);
       server.sendContent(WebOut + CRLF);
       delay(0);
       int iii;
       int i;
       fileOpenFail = 0;
-      for (iii = 1; iii <= TotalNumberOfLines; iii+=50) // important START FROM 1!!!!
+      for (iii = 1; iii <= TotalNumberOfLines; iii += 50) // important START FROM 1!!!!
       {
         TextboxProgramBeingEdited = "";
-        for (i = iii; i < (iii+50); i++)
+        for (i = iii; i < (iii + 50); i++)
         {
           delay(0);
 
           if ( (i > TotalNumberOfLines) || (fileOpenFail == 1) )
-    			{
+          {
             fileOpenFail = 0;
             iii = 9999;
-    				break;
-    			}
+            break;
+          }
 
-			  TextboxProgramBeingEdited = TextboxProgramBeingEdited + "\n" + GetRidOfurlCharacters(BasicProgram(i));
+          TextboxProgramBeingEdited = TextboxProgramBeingEdited + "\n" + BasicProgram(i);
 
         }
         if (TextboxProgramBeingEdited.length() > 0)
         {
-          server.sendContent(String(TextboxProgramBeingEdited.length(),16) + CRLF);
+          server.sendContent(String(TextboxProgramBeingEdited.length(), 16) + CRLF);
           server.sendContent(TextboxProgramBeingEdited + CRLF);
           delay(0);
         }
@@ -518,7 +536,7 @@ void setup() {
       Serial.println("avant par ici");
       WebOut = String(EditorPageHTML);
       WebOut = WebOut.substring(WebOut.indexOf(F("</textarea>")));
-      server.sendContent(String(WebOut.length(), 16) + CRLF);   
+      server.sendContent(String(WebOut.length(), 16) + CRLF);
       server.sendContent(WebOut + CRLF);
       // end of transmission
       server.sendContent(F("0\r\n\r\n"));
@@ -541,7 +559,7 @@ void setup() {
   {
     String ret = "";
     String fn;
-    Dir dir = SPIFFS.openDir(String(F("uploads/") ));
+    Dir dir = SPIFFS.openDir(String(F("/") ));
     while (dir.next()) 
     {
       fn = dir.fileName();  
@@ -549,24 +567,30 @@ void setup() {
         ret +=  fn +"\n";
       delay(0);
     }
-    
+
 
     server.send(200, "text/html", ret);
   });
 
   server.on("/codein", []() {
-
-    if (ProgramName == "")
-    {
-      ProgramName = F("default");
-    }
+//    ProgramName.trim();
+//    if (ProgramName == "")
+//    {
+//      ProgramName = F("/default.bas");
+//    }
 
     if (server.arg("SaveTheCode") == F("start"))
     {
       inData = "end";
       ExicuteTheCurrentLine();
-	  Serial.println(F("start save"));
-	  OpenToWriteOnFlash(String(F("uploads/")) + ProgramName + String(F(".bas")));
+      Serial.println(F("start save"));
+      ProgramName = GetRidOfurlCharacters(server.arg("FileName"));
+      if (ProgramName == "")
+          ProgramName = F("/default.bas");
+      ProgramName.trim();
+      if (ProgramName[0] != '/')
+          ProgramName = "/" + ProgramName;
+      OpenToWriteOnFlash( ProgramName );
     }
 
     if (server.arg("SaveTheCode") != F("yes") & server.arg("SaveTheCode") != F("start") & server.arg("SaveTheCode") != F("end"))
@@ -576,9 +600,9 @@ void setup() {
       int y = LineNoForWebEditorIn.toInt();
       delay(0);
       //Serial.println(server.arg("code"));
-	    Serial.println(ProgramName + F(".bas/") + String(y));
+      Serial.println(ProgramName + F("/") + String(y));
       //BasicProgramWriteLine(y, GetRidOfurlCharacters(server.arg("code")));
-	    WriteBasicLineOnFlash(GetRidOfurlCharacters(server.arg("code")));
+      WriteBasicLineOnFlash(GetRidOfurlCharacters(server.arg("code")));
       delay(0);
       noOfLinesForEdit = y;
 
@@ -588,23 +612,23 @@ void setup() {
     {
       // terminate the save
       Serial.println(F("end of save!!"));
-	    CloseWriteOnFlash();
-      LoadBasicProgramFromFlash(String(F("uploads/"))+ ProgramName + String(F(".bas")));
+      CloseWriteOnFlash();
+      LoadBasicProgramFromFlash( ProgramName );
     }
-    
+
     if (server.arg("SaveTheCode") == F("yes"))
     {
 
-//      String directoryToDeleteFilesFrom;
-//      directoryToDeleteFilesFrom = String(F(" /data/") + ProgramName;
-//      Dir dir1 = SPIFFS.openDir(directoryToDeleteFilesFrom);
-//
-//      while (dir1.next())
-//      {
-//        delay(0);
-//        File f = dir1.openFile("r");
-//        if (dir1.fileName().substring(0, directoryToDeleteFilesFrom.length()) == directoryToDeleteFilesFrom) SPIFFS.remove(dir1.fileName());
-//      }
+      //      String directoryToDeleteFilesFrom;
+      //      directoryToDeleteFilesFrom = String(F(" /data/") + ProgramName;
+      //      Dir dir1 = SPIFFS.openDir(directoryToDeleteFilesFrom);
+      //
+      //      while (dir1.next())
+      //      {
+      //        delay(0);
+      //        File f = dir1.openFile("r");
+      //        if (dir1.fileName().substring(0, directoryToDeleteFilesFrom.length()) == directoryToDeleteFilesFrom) SPIFFS.remove(dir1.fileName());
+      //      }
     }
     server.send(200, "text/html", F("good"));
   });
@@ -640,7 +664,7 @@ void setup() {
   server.onNotFound ( []() {
     String fileNameToServeUp;
     fileNameToServeUp = GetRidOfurlCharacters(server.arg("file"));
-    File mySuperFile = SPIFFS.open(String(F("uploads/")) + fileNameToServeUp, "r");
+    File mySuperFile = SPIFFS.open(String(F("/uploads/")) + fileNameToServeUp, "r");
     if (mySuperFile)
     {
       server.streamFile(mySuperFile, getContentType(fileNameToServeUp));
@@ -678,13 +702,13 @@ void setup() {
   lcd.begin(16, 2); // initialize the lcd for 16 chars 2 lines and turn on backlight
   sensors.begin();
 
-  LoadBasicProgramFromFlash("uploads/" + ProgramName + ".bas");
-  
+  LoadBasicProgramFromFlash( ProgramName);
+
   server.begin();
   RunningProgram = 0;
   WaitForTheInterpertersResponse = 1;
   StartUpProgramTimer();
-
+  InitCommandParser(); // init the commands parser
 }
 
 
@@ -762,6 +786,7 @@ String SettingsPageHandeler()
 
     if ( server.arg("format") == F("Format") )
     {
+      // BasicFileOpened.close();
       Serial.println(F("Formating "));
       Serial.print(SPIFFS.format());
     }
@@ -783,7 +808,7 @@ String SettingsPageHandeler()
       WebOut.replace(F("**checked**"), "");
     }
   }
-return WebOut;
+  return WebOut;
 }
 
 
@@ -845,7 +870,7 @@ void DoSomeFileManagerCode()
       //Serial.println(SPIFFS.remove("uploads/settings.png"));
     }
 
-    Dir dir = SPIFFS.openDir(String(F("uploads") ));
+    Dir dir = SPIFFS.openDir(String(F("/") ));
     while (dir.next()) {
       FileListForPage += String(F("<option>")) + dir.fileName() + String(F("</option>"));
       delay(0);
@@ -857,10 +882,37 @@ void DoSomeFileManagerCode()
     {
       String FileNameToView = server.arg("fileName");
       FileNameToView = GetRidOfurlCharacters(FileNameToView);
-      FileNameToView.replace("uploads/", "");
+      FileNameToView.replace("/uploads/", "");
       WholeUploadPage = F(R"=====(  <meta http-equiv="refresh" content="0; url=./file?file=item" />)=====");
       WholeUploadPage.replace("item", FileNameToView);
     }
+
+
+    if (server.arg("Edit") != "")
+    {
+      String FileNameToView = server.arg("fileName");
+      FileNameToView = GetRidOfurlCharacters(FileNameToView);
+      //FileNameToView.replace("/uploads/", "");
+      WholeUploadPage = F(R"=====(  <meta http-equiv="refresh" content="1; url=./edit?name=item&open=Open" />)=====");
+      WholeUploadPage.replace("item", FileNameToView);
+    }
+
+    if (server.arg("Rename") != "")
+    {
+      String FileNameToView = server.arg("fileName");
+      FileNameToView = GetRidOfurlCharacters(FileNameToView);
+      String newfileName = server.arg("newfileName");
+      newfileName  = GetRidOfurlCharacters(newfileName );
+      WholeUploadPage = F(R"=====(<form id="filelist">Old Name<br><input type="text" name="fileName" value="*item name*"><br>New Name<br><input type="text" name="newfileName" value="*item name*"><input type="submit" value="NewName" name="Rename"></form>)=====");
+      WholeUploadPage.replace("*item name*", FileNameToView);
+      if (newfileName != "" )
+      {
+        newfileName = MakeSureFileNameStartsWithSlash(newfileName);
+        WholeUploadPage = F(R"=====(  <meta http-equiv="refresh" content="0; url=./filemng" />)=====");
+        SPIFFS.rename(FileNameToView , newfileName);
+      }
+    }
+
 
   }
   server.send(200, "text/html",  String( AdminBarHTML + WholeUploadPage ));
@@ -875,7 +927,7 @@ void handleFileUpdate()
   if (upload.status == UPLOAD_FILE_START) {
     String filename = upload.filename;
     //DBG_OUTPUT_PORT.print("Upload Name: "); DBG_OUTPUT_PORT.println(filename);
-    fsUploadFile = SPIFFS.open(String("uploads/" + filename), "w");
+    fsUploadFile = SPIFFS.open(String("/uploads/" + filename), "w");
     filename = String();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     //DBG_OUTPUT_PORT.print("Upload Data: "); DBG_OUTPUT_PORT.println(upload.currentSize);
@@ -1050,15 +1102,76 @@ void runTillWaitPart2()
     delay(0);
     RunningProgramCurrentLine++;
     inData = BasicProgram(RunningProgramCurrentLine);
+    inData = StripCommentsFromLine(inData);
     if (fileOpenFail == 1) inData  = "end";
     ExicuteTheCurrentLine();
     delay(0);
+    CheckForUdpData();
   }
+  if (RunningProgram == 1 && RunningProgramCurrentLine < TotalNumberOfLines && WaitForTheInterpertersResponse == 1 )
+  {
+    //Serial.print("sto in wait ");
+    //Serial.println(RunningProgramCurrentLine);
+    CheckForUdpData();
+  }
+   
+    
 }
 
+String StripCommentsFromLine(String ret)
+{
+  // comment handling stuff
+  // we try to remove all the comment from the line
+  // the comment is defined as all the text following the ' (single quote) until the end of the line
+  // the problem is that the ' can be also inside a string (text included between quotes " )
+  // so we need to understand if the ' is inside quotes or not
+  // let's go
+  bool quotes = false;
+  for (int i = 0; i < ret.length(); i++)
+  {
+    if (ret[i] == '"')
+      quotes = !quotes;
 
+    if ( (ret[i] == '\'') && (quotes == false) )
+    {
+      ret = ret.substring(0, i);  // cut the line at the current position (removes all the comments from the line
+      break;
+    }
+  }
+  return ret;
+}
 
+void CheckForUdpData()
+{
+  int numBytes = udp.parsePacket();
+  if ( numBytes) 
+  {
+//    Serial.print("Packet received ");
+//    Serial.print(RunningProgramCurrentLine);
+//    Serial.print("  ");
+//    Serial.println(udp.available());
 
+    if (numBytes > 0)
+    {
+      char Buffer[numBytes + 1];
+      UdpRemoteIP = udp.remoteIP();
+      UdpRemotePort = udp.remotePort();
+      delay(0);      
+      udp.read(Buffer, numBytes);
+      Buffer[numBytes] = '\0'; // terminate the string with '\0'
+      UdpBuffer = String(Buffer);
+    }
+    
+    //// test of gosub ///////
+    if (UdpBranchLine != 0)
+    {
+      NumberOfReturns = NumberOfReturns + 1;
+      ReturnLocations[NumberOfReturns] = RunningProgramCurrentLine - WaitForTheInterpertersResponse;  // if the program is in wait, it returns to the previous line to wait again
+      WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub      
+      RunningProgramCurrentLine = UdpBranchLine + 1; // gosub after the udpbranch label
+    }
+  }  
+}
 
 String getValueforPrograming(String data, char separator, int index)
 {
@@ -1092,15 +1205,12 @@ String getValue(String data, char separator, int index)
   {
     if (data[i] == '\"' )
     {
-      chunkVal.concat(data[i]);
       i++;
-      
       while (i <= maxIndex && data[i] != '\"' ) {
         chunkVal.concat(data[i]);
         i++;
         delay(0);
       }
-      chunkVal.concat(data[i]);
     }
     else if (data[i] == '|' )
     {
@@ -1145,97 +1255,6 @@ String getValue(String data, char separator, int index)
 
 
 
-
-
-
-
-
-
-
-
-String DoMathForMe(String cc, String f, String dd )
-{
-  double e;
-  String ee = cc;
-
-  double c = cc.toFloat();
-  double d = dd.toFloat();
-
-  f.trim();
-
-  if (f == "-") {
-    e = c - d;
-    ee = String(e);
-  }
-  if (f == "+") {
-    e = c + d;
-    ee = String(e);
-  }
-  if (f == "*") {
-    e = c * d;
-    ee = String(e);
-  }
-  if (f == "/") {
-    e = c / d;
-    ee = String(e);
-  }
-  if (f == "^") {
-    e = pow(c , d);
-    ee = String(e);
-  }
-
-
-
-  if (f == "&") {
-    ee = String(cc + dd);
-  }
-
-
-  if (f ==  ">") {
-    ee = String((c > d));
-  }
-  if (f ==  "<") {
-    ee = String((c < d));
-  }
-
-
-  if (f ==  ">=") {
-    ee = String((c >= d));
-  }
-  if (f ==  "<=") {
-    ee = String((c <= d));
-  }
-
-  if (f == "<>" || f == " != ")
-  {
-    if (cc != dd)
-    {
-      ee = "1";
-    }
-    else
-    {
-      if (c != d)
-      {
-        ee = "1";
-      }
-    }
-  }
-
-
-  if (f == "==")
-  {
-    ee = String((cc == dd));
-  }
-
-  if (f == "=")
-  {
-    ee = String((c == d));
-  }
-  return ee;
-}
-
-
-
 String FetchOpenWeatherMapApi(String URLtoGet, String index)
 {
   String ServerToConnectTo = URLtoGet.substring(0, URLtoGet.indexOf("/"));
@@ -1254,8 +1273,8 @@ String FetchOpenWeatherMapApi(String URLtoGet, String index)
   int list = index.toInt();
 
   if (list == 0)  // if the index is 0, it takes the first part, the root
-    phase = 3; 
-    
+    phase = 3;
+
   if (client.connect(ServerToConnectTo.c_str() , 80))
   {
     client.print(String("GET " + PageToGet + " HTTP/1.1\r\nHost: " +  ServerToConnectTo + "\r\n\r\n"));
@@ -1263,107 +1282,105 @@ String FetchOpenWeatherMapApi(String URLtoGet, String index)
 
     while (client.available())
     {
-        delay(0);
-        //delay(1);
-        c = client.read();
-        delay(0);
-        //Serial.print(c);
-        switch (phase)
-        {
-          case 0:
-            if (c == lookforLIST[ptr])
-                ptr++;
-            else
-                ptr = 0;
-            
-            if (ptr == strlen(lookforLIST))
-            {
-                phase = 1;
-                list = list -1;
-                if (list == 0)
-                {
-                  phase = 2;
-                 }
-                //Serial.println("phase 0 OK");
-            }
-            break;
-            
-          case 1:
-            if (c == '{')
-              graffe++;
-            else
-              if (c == '}')
-                graffe--;
+      delay(0);
+      //delay(1);
+      c = client.read();
+      delay(0);
+      //Serial.print(c);
+      switch (phase)
+      {
+        case 0:
+          if (c == lookforLIST[ptr])
+            ptr++;
+          else
+            ptr = 0;
 
-            if (graffe == 0) 
-            {
-                if ( (c == ',') || (c == ']') )
-                    list--;
-            }
+          if (ptr == strlen(lookforLIST))
+          {
+            phase = 1;
+            list = list - 1;
             if (list == 0)
             {
               phase = 2;
-              //Serial.println("phase 1 OK");
             }
-            break;            
+            //Serial.println("phase 0 OK");
+          }
+          break;
 
-          case 2:
-            s.concat(c);
-            cnt++;
-            if (c == '{')
-              graffe++;
-            else
-              if (c == '}')
-                graffe--;
+        case 1:
+          if (c == '{')
+            graffe++;
+          else if (c == '}')
+            graffe--;
 
-            if ((graffe == 0) || (cnt > 600)) // max 600 chars
-            {
-                //Serial.println("phase 2 OK");
-                client.stop();
-                return s;
-            }
-              
-            break;
+          if (graffe == 0)
+          {
+            if ( (c == ',') || (c == ']') )
+              list--;
+          }
+          if (list == 0)
+          {
+            phase = 2;
+            //Serial.println("phase 1 OK");
+          }
+          break;
 
-          case 3:    // search the beginning of the message starting with  {"
-            if (c == lookforBEGIN[ptr])
-                ptr++;
-            else
-                ptr = 0;
-            
-            if (ptr == strlen(lookforBEGIN))
-            {
-                cnt = 2;
-                phase = 4;
-                //Serial.println("phase 3 OK");
-                s = F("{\"");
-            }
-            break;
+        case 2:
+          s.concat(c);
+          cnt++;
+          if (c == '{')
+            graffe++;
+          else if (c == '}')
+            graffe--;
 
-          case 4:
-            s.concat(c);
-            cnt++;
-            if (c == lookforLIST[ptr])
-                ptr++;
-            else
-                ptr = 0;
-            
-            if ( (ptr == strlen(lookforLIST)) || (cnt > 1000)) // max 1000 chars
-            {
-                //Serial.println("phase 4 OK");
-                client.stop();
-                s.concat("]}");
-                return s;
-            }
-            break;            
-        }
+          if ((graffe == 0) || (cnt > 600)) // max 600 chars
+          {
+            //Serial.println("phase 2 OK");
+            client.stop();
+            return s;
+          }
 
-    if (client.available() == false)
-    {
-      // if no data, wait for 300ms hoping that new data arrive
-      delay(300);
-    }
-      
+          break;
+
+        case 3:    // search the beginning of the message starting with  {"
+          if (c == lookforBEGIN[ptr])
+            ptr++;
+          else
+            ptr = 0;
+
+          if (ptr == strlen(lookforBEGIN))
+          {
+            cnt = 2;
+            phase = 4;
+            //Serial.println("phase 3 OK");
+            s = F("{\"");
+          }
+          break;
+
+        case 4:
+          s.concat(c);
+          cnt++;
+          if (c == lookforLIST[ptr])
+            ptr++;
+          else
+            ptr = 0;
+
+          if ( (ptr == strlen(lookforLIST)) || (cnt > 1000)) // max 1000 chars
+          {
+            //Serial.println("phase 4 OK");
+            client.stop();
+            s.concat("]}");
+            return s;
+          }
+          break;
+      }
+
+      if (client.available() == false)
+      {
+        // if no data, wait for 300ms hoping that new data arrive
+        delay(300);
+      }
+
     }//while
     client.stop();
     return F("END OF DATA REACHED");
@@ -1380,22 +1397,32 @@ String FetchOpenWeatherMapApi(String URLtoGet, String index)
 
 
 
-String FetchWebUrl(String URLtoGet)
+String FetchWebUrl(String URLtoGet, int PortNoForPage)
 {
+  if (PortNoForPage == 0) PortNoForPage = 80;
   String str = "             ";
   String ServerToConnectTo = URLtoGet.substring(0, URLtoGet.indexOf("/"));
   String PageToGet = URLtoGet.substring(URLtoGet.indexOf("/"));
+  byte numberOwebTries;
   // ServerToConnectTo ;
   //PageToGet = URLtoGet.substring(URLtoGet.indexOf("/"));
 
-//  Serial.println(ServerToConnectTo);
-//  Serial.println(PageToGet);
+  //  Serial.println(ServerToConnectTo);
+  //  Serial.println(PageToGet);
 
 
-  if (client.connect(ServerToConnectTo.c_str() , 80))
+  if (client.connect(ServerToConnectTo.c_str() , PortNoForPage))
   {
     client.print(String("GET " + PageToGet + " HTTP/1.1\r\nHost: " +  ServerToConnectTo + "\r\n\r\n"));
-    delay(300);
+    delay(3500);
+    //    while ( ! client.available() && numberOwebTries < 10 ) {
+    //      numberOwebTries++;
+    //      delay(1000);   // 1 second
+    //    }
+
+
+
+
     while (client.available())
     {
       delay(0);

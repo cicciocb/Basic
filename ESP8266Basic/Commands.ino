@@ -1,5 +1,43 @@
+parser_data pd;
+int num_args;
+PARSER_PREC args[PARSER_MAX_ARGUMENT_COUNT];
+String *args_str[PARSER_MAX_ARGUMENT_COUNT];
+
+void InitCommandParser()
+{
+  //parser_data_init( &pd, NULL, variable_callback, function_callback, NULL );
+  pd.str = NULL;
+  pd.len = 0;
+  pd.pos = 0;
+  pd.error = NULL;
+  pd.variable_cb = variable_callback;
+  pd.function_cb = function_callback;
+}
+
+int ExtractArguments(String &inData)
+{
+  int r;
+  inData.concat(')'); // add a parenthesys at the end
+  pd.pos = inData.indexOf(' ') + 1;    // starts just after the command
+  pd.str = inData.c_str();
+  pd.len = inData.length() + 1; // important the +1 as this permit to touch the '\0'
+  pd.error = NULL; // reset the previous error
+  r = parser_read_argument_list( &pd, &num_args, args, args_str);
+  if (pd.error != NULL)
+    PrintAndWebOut(String(pd.error));
+  return r;
+}
+
+void DeAllocateArguments()
+{
+  for (int i = 0; i < num_args; i++)
+    delete args_str[i];
+}
+
 void ExicuteTheCurrentLine()
 {
+  int r;
+
   String Param0;
   String Param1;
   String Param2;
@@ -16,14 +54,11 @@ void ExicuteTheCurrentLine()
 
   Param0.toLowerCase();
 
-Line_For_Eval = inData; /////////////////////////////////////////////////////////////////////////////////////////////////
+  // Line_For_Eval = inData; /////////////////////////////////////////////////////////////////////////////////////////////////
 
-  int valParam0 = Param0.toInt();
+  //  int valParam0 = Param0.toInt();
   int valParam1 = Param1.toInt();
   int valParam2 = Param2.toInt();
-  int valParam3 = Param3.toInt();
-  int valParam4 = Param4.toInt();
-  int valParam5 = Param5.toInt();
 
 
   if (BasicDebuggingOn == 1)
@@ -38,50 +73,51 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
     Serial.println(Param5);
   }
 
-
+  Param0.trim();
   if ( Param0 == "") return;
+  if (Param0.startsWith("["))  return;
 
   if ( Param0 == F("if"))
   {
-    //Serial.print("Dofing if Statement");
-    //Serial.println(DoMathForMe(GetMeThatVar(Param1), Param2, GetMeThatVar(Param3)));
-    if (DoMathForMe(GetMeThatVar(Param1), Param2, GetMeThatVar(Param3)) == "1" )
+    // the goal here is to find if there is a "then" or an "else"
+    // so the best is to take the positions of each one
+    // we need to take care if these words are included into the commands or arguments
+    // so, for the moment, we should avoid to use these "words" inside the line
+    // we can just define that these words should be surrounded by spaces (" then " " else ")
+    //
+    int then_pos, else_pos;
+
+    then_pos = inData.indexOf(" then ");
+    else_pos = inData.indexOf(" else ");
+
+    if (then_pos < 0)
     {
-
-      Param0 = getValue(inData, ' ', 5);
-      Param1 = getValue(inData, ' ', 6);
-      Param2 = getValue(inData, ' ', 7);
-      Param3 = getValue(inData, ' ', 8);
-      Param4 = getValue(inData, ' ', 9);
-      Param5 = getValue(inData, ' ', 10);
-      inData = String(Param0 + " " + Param1 + " " + Param2 + " " + Param3 + " " + Param4 + " " + Param5 + " ");
-      Param0.toLowerCase();
-
+      PrintAndWebOut(F("Syntax error in if command"));
+      return;
     }
+
+    String Comparaison = inData.substring(2, then_pos);
+    Comparaison.trim();
+    //Serial.println(Comparaison);
+
+    if (evaluate(Comparaison) == "-1")
+      inData = inData.substring(then_pos + 6, else_pos);
+    else if (else_pos > 0)
+      inData = inData.substring(else_pos + 6);
     else
-    {
-      for (int i = 6; i <= 17; i++)
-      {
-        delay(0);
-        //Serial.println(i);
-        //Serial.println(Param0);
-        Param0 = getValue(inData, ' ', i);
-        Param0.toLowerCase();
-        if ( Param0 == F("else"))
-        {
-          //Serial.println("Found else");
-          Param0 = getValue(inData, ' ', i + 1);
-          Param1 = getValue(inData, ' ', i + 2);
-          Param2 = getValue(inData, ' ', i + 3);
-          Param3 = getValue(inData, ' ', i + 4);
-          Param4 = getValue(inData, ' ', i + 5);
-          Param5 = getValue(inData, ' ', i + 6);
-          inData = String(Param0 + " " + Param1 + " " + Param2 + " " + Param3 + " " + Param4 + " " + Param5 + " ");
-          Param0.toLowerCase();
-          break;
-        }
-      }
-    }
+      return; // there is no else command
+
+    inData.trim();
+    //Serial.println(inData);
+    //Param0 = inData.substring(0, inData.indexOf(' '));    // recover the new command
+    Param0 = getValue(inData, ' ', 0);// recover the new command
+    Param1 = getValue(inData, ' ', 1);
+    Param2 = getValue(inData, ' ', 2);
+    Param3 = getValue(inData, ' ', 3);
+    Param4 = getValue(inData, ' ', 4);
+    Param5 = getValue(inData, ' ', 5);
+
+    Param0.toLowerCase();
   }
 
 
@@ -89,20 +125,25 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
   if (Param0 == F("for"))
   {
 
-    //    for (int i = ForNextReturnLocations[0]; i <= 1; i--)
-    //    {
-    //      delay(0);
-    //      if (RunningProgramCurrentLine == ForNextReturnLocations[i])
-    //      {
-    //        break;
-    //      }
-    //    }
-
     ForNextReturnLocations[0]++;
     ForNextReturnLocations[ForNextReturnLocations[0]] = RunningProgramCurrentLine;
 
-
-    Param0 = F("let");
+    // looks for the 'to'
+    r = inData.lastIndexOf("to");
+    if (r == -1)
+    {
+      PrintAndWebOut(F("Syntax error in for"));
+      return;
+    }
+    Param1 = inData.substring(3, r);  // extract the text  i = 11 (eliminate the 'for' and the 'to ....')
+    // looks for the '='
+    r = Param1.indexOf('=');
+    Param2 = Param1.substring(0, r);
+    Param2.trim();
+    Param3 = Param1.substring(r + 1);
+    Param3.trim();
+    SetMeThatVar(Param2, evaluate(Param3));
+    return;
   }
 
 
@@ -114,30 +155,38 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
     for (int i = ForNextReturnLocations[0]; i >= 1; i--)
     {
       delay(0);
+
       String gotoTestFor = BasicProgram(ForNextReturnLocations[i]);
       gotoTestFor.trim();
 
-      String VarTest = getValue(gotoTestFor, ' ', 1);
+      // looks for the '='
+      r = gotoTestFor.indexOf('=');
+      String VarTest = gotoTestFor.substring(3, r); //getValue(gotoTestFor, ' ', 1);
+      VarTest.trim();
+      //Serial.print("vartest "+ VarTest);
 
-      String VarTestIfDone = getValue(gotoTestFor, ' ', 5);
+      // looks for the 'to'
+      r = gotoTestFor.lastIndexOf("to");
+      String VarTestIfDone = gotoTestFor.substring(r + 2); //getValue(gotoTestFor, ' ', 5);
+      //VarTestIfDone.trim();
+      //Serial.print("VarTestIfDone " + VarTestIfDone);
+
       if (ForNextReturnLocations[i] == 0) return;
 
 
       if (VarTest == Param1)
       {
-        float test1 = GetMeThatVar(VarTest).toFloat();
-        float test2 = GetMeThatVar(VarTestIfDone).toFloat();
+        float test1 = VarialbeLookup(VarTest).toFloat();
+        float test2 = evaluate(VarTestIfDone).toFloat(); //GetMeThatVar(VarTestIfDone).toFloat();
 
         //Serial.println(test1);
         //Serial.println(test2);
 
-        if ( test1  !=  test2 )
+        if ( test1  <  test2 )
         {
           RunningProgramCurrentLine = ForNextReturnLocations[i];
-          Param0 = F("let");
-          Param3 = Param1;
-          Param4 = "+";
-          Param5 = "1";
+
+          SetMeThatVar(Param1, evaluate(Param1 + "+1"));
           break;
         }
         else
@@ -147,7 +196,7 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
         }
       }
     }
-
+    return;
   }
 
 
@@ -264,25 +313,25 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
   if ( Param0 == F("po"))
   {
 
-    valParam2 = GetMeThatVar(Param2).toInt();
+    valParam2 = VarialbeLookup(Param2).toInt();
 
-    UniversalPinIO("po", GetMeThatVar(Param1), valParam2);
+    UniversalPinIO("po", VarialbeLookup(Param1), valParam2);
     return;
   }
 
 
   if ( Param0 == F("pwi"))
   {
-    SetMeThatVar(Param2, String(UniversalPinIO("pwi", GetMeThatVar(Param1), 0)));
+    SetMeThatVar(Param2, String(UniversalPinIO("pwi", VarialbeLookup(Param1), 0)));
     return;
   }
 
   if ( Param0 == F("pwo"))
   {
 
-    valParam2 = GetMeThatVar(Param2).toInt();
+    valParam2 = VarialbeLookup(Param2).toInt();
 
-    UniversalPinIO("pwo", GetMeThatVar(Param1), valParam2);
+    UniversalPinIO("pwo", VarialbeLookup(Param1), valParam2);
     return;
   }
 
@@ -307,9 +356,9 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
   if ( Param0 == F("servo"))
   {
-    valParam2 = GetMeThatVar(Param2).toInt();
-
-    UniversalPinIO(F("servo"), GetMeThatVar(Param1), valParam2);
+    valParam2 = evaluate(Param2).toInt();
+    delay(0);
+    UniversalPinIO(F("servo"), evaluate(Param1), valParam2);
     return;
   }
 
@@ -326,37 +375,67 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
   if ( Param0 == F("write"))
   {
-    SaveDataToFile(GetMeThatVar(Param1), GetMeThatVar(Param2));
+    SaveDataToFile(GetMeThatVar(Param1), VarialbeLookup(Param2));
     return;
   }
 
 
+  if ( Param0 == F("comando"))
+  {
+    r = ExtractArguments(inData);
 
-
+    if (num_args == 2)
+    {
+      if (isnan(args[0]))
+        Serial.println(*args_str[0]);
+      if (isnan(args[1]))
+        Serial.println(*args_str[1]);
+    }
+    DeAllocateArguments();
+    return;
+  }
 
 
 
   if ( Param0 == F("delay"))
   {
-    valParam1 = GetMeThatVar(Param1).toInt();
-    delay(valParam1);
+    // this is an example of extraction using the ExtractArgument function just for one parameter
+    // the best way, with a single parameter, is to use directly the eval command
+    r = ExtractArguments(inData);
+    //valParam1 = GetMeThatVar(Param1).toInt();
+    delay(args[0]);
+    DeAllocateArguments();  // don't forget to call this function after each ExtractArguments
     return;
   }
-
 
   if ( Param0 == F("timer"))
   {
-    TimerWaitTime = GetMeThatVar(Param1).toInt();
+    // this is another way to separate the arguments
+    // we can state that the label name is separated from the 1st argument by a ',';
+    // we can so find the ',' from the end of the string and take the argument space trimmed for the label name
+    // the 1st argument will be so the text between this ',' and the end of the command
+    Param1 = inData.substring(inData.indexOf(' ') + 1);    // starts just after the command
+    r = Param1.lastIndexOf(',');
+    if (r == -1)
+    {
+      PrintAndWebOut(F("Syntax Error; Label or argument missing"));
+      return;
+    }
+    Param2 = Param1.substring(r + 1);
+    Param2.trim();
+    Param1 = Param1.substring(0, r);
+    TimerWaitTime = evaluate(Param1).toInt();
     TimerBranch = Param2;
-    timerLastActiveTime = millis();
+    //TimerWaitTime = GetMeThatVar(Param1).toInt();
+    //TimerBranch = Param2;
     return;
   }
 
-
   if ( Param0 == F("sleep"))
   {
-
-    ESP.deepSleep(GetMeThatVar(Param1).toInt() * 1000000, WAKE_RF_DEFAULT);
+    // this command needs to be checked!
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    ESP.deepSleep(evaluate(Param1).toInt() * 1000000, WAKE_RF_DEFAULT);
     return;
   }
 
@@ -364,26 +443,35 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
   if (Param0 == F("print"))
   {
-    PrintAndWebOut(GetMeThatVar(Param1));
+    // this is an example of extraction using directly the evaluate function taking into account all the text after the command (so after the ' ' )
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    //PrintAndWebOut(GetMeThatVar(Param1));
+    PrintAndWebOut(evaluate(Param1));
     return;
   }
 
 
   if (Param0 == F("serialprint"))
   {
-    Serial.print(GetMeThatVar(Param1));
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    //Serial.print(GetMeThatVar(Param1));
+    Serial.print(evaluate(Param1));
     return;
   }
 
   if (Param0 == F("serialprintln"))
   {
-    Serial.println(GetMeThatVar(Param1));
+    //Serial.println(GetMeThatVar(Param1));
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    Serial.println(evaluate(Param1));
     return;
   }
 
   if (Param0 == F("serial2begin"))
   {
-    Serial1.begin(GetMeThatVar(Param1).toInt());
+    //Serial1.begin(GetMeThatVar(Param1).toInt());
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    Serial1.begin(evaluate(Param1).toInt());
     return;
   }
   if (Param0 == F("serial2end"))
@@ -391,7 +479,7 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
     Serial1.end();
     return;
   }
-  
+
   if (Param0 == F("serial2print"))
   {
     Serial1.print(GetMeThatVar(Param1));
@@ -406,7 +494,9 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
   if (Param0 == F("baudrate"))
   {
-    Serial.begin(GetMeThatVar(Param1).toInt());
+    //Serial.begin(GetMeThatVar(Param1).toInt());
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    Serial.begin(evaluate(Param1).toInt());
     return;
   }
 
@@ -497,7 +587,9 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
   if (Param0 == F("wprint") | Param0 == F("html"))
   {
-    HTMLout += GetMeThatVar(Param1);
+     Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    Param1 = evaluate(Param1);
+    HTMLout += Param1;
     //Serial.print(HTMLout);
     return;
   }
@@ -538,7 +630,7 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
   if (Param0 == F("textbox"))
   {
     String tempTextBox = GenerateIDtag(TextBox);
-    GetMeThatVar(Param1);
+    VarialbeLookup(Param1);
     if (VariableLocated == 0)
     {
       SetMeThatVar(Param1, "");
@@ -556,7 +648,7 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
   if (Param0 == F("passwordbox"))
   {
     String tempTextBox = GenerateIDtag(passwordbox);
-    GetMeThatVar(Param1);
+    VarialbeLookup(Param1);
     if (VariableLocated == 0)
     {
       SetMeThatVar(Param1, "");
@@ -574,7 +666,7 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
   if (Param0 == F("slider"))
   {
     String tempSlider = GenerateIDtag(Slider);
-    GetMeThatVar(Param1);
+    VarialbeLookup(Param1);
     if (VariableLocated == 0)
     {
       SetMeThatVar(Param1, "");
@@ -637,6 +729,8 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
   if (Param0 == F("button"))
   {
+    //Serial.println(Param1);
+    //Serial.println(Param2);
     numberButtonInUse++;
     String tempButton = GenerateIDtag(GOTObutton);
     tempButton.replace(F("gotonotext"),  GetMeThatVar(Param1));
@@ -820,7 +914,7 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
   {
     for (int i = 1; i <= TotalNumberOfLines; i++) {
       String gotoTest = BasicProgram(i);
-//      Serial.println(i);
+      //      Serial.println(i);
       gotoTest.trim();
       if (fileOpenFail == 1) break;
 
@@ -920,15 +1014,6 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
 
 
-
-  if (Param0 == F("wget"))
-  {
-    SetMeThatVar(Param1, FetchWebUrl(GetMeThatVar(Param2)));
-    return;
-  }
-
-
-
   if (Param0 == F("setupemail"))
   {
     EmailServer = GetMeThatVar(Param1);
@@ -959,14 +1044,16 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
 
   if (Param0 == F("msgreturn"))
   {
-    MsgBranchRetrnData = GetMeThatVar(Param1);
+    MsgBranchRetrnData = VarialbeLookup(Param1);
     return;
   }
 
 
   if (Param0 == F("msgget"))
   {
+    Serial.println(Param1);
 
+    Serial.println(Param2);
     Param1 = GetMeThatVar(Param1);
     int str_len = Param1.length() + 1;
     char MgetToTest[str_len];
@@ -976,27 +1063,197 @@ Line_For_Eval = inData; ////////////////////////////////////////////////////////
   }
 
 
-  // let command down here for a reason
 
-
-  if ( Param1 == "=")
+  // CiccioCB UDP commands
+  //////////////////////////////////////////////////////////////////////////////////
+  if (Param0 == F("udpbegin"))  // the command is : udpbegin port
   {
-    Param0 = getValue(inData, ' ', 0);
-    Param5 = Param4;
-    Param4 = Param3;
-    Param3 = Param2;
-    Param2 = Param1;
-    Param1 = Param0;
-    Param0 = "let";
-  }
+    String ar = inData.substring(Param0.length() + 1);    // starts just after the command
+    int v = evaluate(ar).toInt();        
+    udp.begin(v);
 
-  if ( Param0 == F("let"))
-  {
-    SetMeThatVar(Param1, DoMathForMe(GetMeThatVar(Param3), Param4, GetMeThatVar(Param5)));
     return;
   }
 
-  Param0 = getValue(inData, ' ', 0);
-  GetMeThatVar(Param0); //will exicure any functions if no other commands were found.
+
+  if (Param0 == F("udpbeginmulticast"))  // the command is : udpbeginmulticast multicast_ip, port
+  {
+    r = ExtractArguments(inData);
+    IPAddress RemoteIP;
+    if (num_args == 2)
+    {
+      //1st arg is the multicast IP address
+      // convert it from String to int
+      int st = 0;
+      int en;
+      for (int i=0; i<4; i++)
+      {
+        en = args_str[0]->indexOf('.', st);
+        RemoteIP[i] =  args_str[0]->substring(st, en).toInt();
+        st = en + 1;
+      }
+      udp.beginMulticast(WiFi.localIP(), RemoteIP, args[1]);
+    }
+     
+    DeAllocateArguments();
+    return;
+  }
+
+  
+  if (Param0 == F("udpwrite"))  // the command is : udpwrite ip_address, port, message
+  {
+    r = ExtractArguments(inData);
+    IPAddress RemoteIP;
+    if (num_args == 3)
+    {
+      //1st arg is the IP address
+      // convert it from String to int
+      int st = 0;
+      int en;
+      for (int i=0; i<4; i++)
+      {
+        en = args_str[0]->indexOf('.', st);
+        RemoteIP[i] =  args_str[0]->substring(st, en).toInt();
+        st = en + 1;
+      }
+      udp.beginPacket(RemoteIP, args[1]);
+      udp.write(args_str[2]->c_str());
+      udp.endPacket();
+    }
+    DeAllocateArguments();
+    return;
+  }
+
+
+  if (Param0 == F("udpwritemulticast"))  // the command is : udpwritemulticast, ip_address_multi, port, message
+  {
+    r = ExtractArguments(inData);
+    IPAddress RemoteIP;
+    if (num_args == 3)
+    {
+      //1st arg is the IP address
+      // convert it from String to int
+      int st = 0;
+      int en;
+      for (int i=0; i<4; i++)
+      {
+        en = args_str[0]->indexOf('.', st);
+        RemoteIP[i] =  args_str[0]->substring(st, en).toInt();
+        st = en + 1;
+      }
+      udp.beginPacketMulticast(RemoteIP, args[1], WiFi.localIP());
+      udp.write(args_str[2]->c_str());
+      udp.endPacket();
+    }
+    DeAllocateArguments();
+    return;
+  }
+
+  if (Param0 == F("udpreply"))  // the command is : udpreply message
+  {
+    String ar = inData.substring(Param0.length() + 1);    // starts just after the command
+    String rep = evaluate(ar); 
+    udp.beginPacket(UdpRemoteIP, UdpRemotePort);
+//    Serial.println(UdpRemoteIP);
+//    Serial.println(UdpRemotePort);
+    
+    udp.write(rep.c_str());
+    udp.endPacket();
+    return;
+  }
+
+  
+  
+  if (Param0 == F("udpstop"))
+  {
+    udp.stop();
+    return;
+  }
+
+  if (Param0 == F("udpbranch"))
+  {
+    UdpBranchLine = 0;
+    for (int i = 1; i <= TotalNumberOfLines; i++) 
+    {
+      String gotoTest = BasicProgram(i);
+      gotoTest.trim();
+      if (fileOpenFail == 1) break;
+      if (gotoTest == Param1 | String(gotoTest + ":") == Param1 )
+      {
+          UdpBranchLine = i - 1;
+          break;
+      }
+    }
+    if (UdpBranchLine == 0)
+      PrintAndWebOut(F("UdpBranch line not found!"));
+//    Serial.print("udpbranch");
+//    Serial.println(UdpBranchLine);
+    return;    
+  }
+
+  ////////////////////////////
+  
+  // let command down here for a reason
+
+  if ( Param1.startsWith(F("=")))
+  {
+    Param0 = "let";
+  }
+
+  if ( Param0.indexOf('=') > 1 )
+  { Serial.println("Found the  = sign");
+    inData.replace(F("="), F(" = "));
+    Param0 = "let";
+  }
+
+
+
+
+  if ( Param0 == F("let"))
+  {
+    //Serial.println("Evaluating . .. .");
+    //Serial.println(inData);
+    //SetMeThatVar(Param1, DoMathForMe(GetMeThatVar(Param3), Param4, GetMeThatVar(Param5)));
+
+    // we should use a more "scientific" way to recognize the line;
+    // tipically a let line is composed of :
+    // 1) an optional 'let' followed by space(s)
+    // 2) the variable name followed by space(s) or '='
+    // 3) the "=" sign
+    // 4) the math operation
+
+    // we assume that the line has already been 'trimmed' with leading and trailing spaces removed
+    // a new function is required to identify more clearly each element of the line!!!!
+    // this is just a test
+    // step 1
+    if (inData.substring(0, 3) == "let")
+      inData = inData.substring(4);
+
+    //step2
+    int equal_pos = inData.indexOf('=');
+    if (equal_pos == -1)
+    {
+      Serial.println(F("syntax error. Missing the '=' on the line!"));
+      return;
+    }
+    Param1 = inData.substring(0, equal_pos);
+    Param1.trim();
+    //Serial.println(Param1);
+    Param2 = inData.substring(equal_pos + 1);
+    Param2.trim();
+    //Serial.println(Param2);
+    Param3 = evaluate(Param2);
+    //    Serial.print("risultato ");
+    //    Serial.println(Param3);
+    SetMeThatVar(Param1, Param3);
+    return;
+  }
+  //Serial.println(RunningProgramCurrentLine);
+  //Param0 = getValue(inData, ' ', 0);
+  if ( inData != "") {
+    evaluate(inData);//will exicure any functions if no other commands were found.
+    return;
+  }
+  PrintAndWebOut(String(F("syntax error on line ")) + String(RunningProgramCurrentLine));
   return;
 }
