@@ -1054,9 +1054,9 @@ void ExicuteTheCurrentLine()
 
   if (Param0 == F("msgget"))
   {
-    Serial.println(Param1);
+    //Serial.println(Param1);
 
-    Serial.println(Param2);
+    //Serial.println(Param2);
     Param1 = GetMeThatVar(Param1);
     int str_len = Param1.length() + 1;
     char MgetToTest[str_len];
@@ -1342,32 +1342,34 @@ void ExicuteTheCurrentLine()
       {  PrintAndWebOut(F("Array: missing closing parenthesys"));  return; }
     // check if the '=' follow
     int eq = inData.indexOf('=', i);
-    if (eq == -1) // missing = on the line
-      {  PrintAndWebOut(F("Array: missing = on the line"));  return; }      
-    Param1 = Param0.substring(0, r); // array name
-    Param1.trim();
-//    Serial.println("array name " + Param1 );
-    Param2 = inData.substring(r+1 ,i);  // arguments
-//    Serial.println("arguments " +  Param2);
-    r = ExtractArguments(Param2);
-    DeAllocateArguments();
-    if (num_args != 1) 
-      {  PrintAndWebOut(F("Array: number of arguments must be 1"));  return; }
-
-    Param3 = evaluate(inData.substring( eq + 1 ));
-
-    if ( (r = Search_Array(Param1)) == -1)
-        {  PrintAndWebOut(F("Array not defined"));  return; }
-
-    if (basic_arrays[r].Format == PARSER_STRING) // string format
+    if (eq != -1) // the '=' is present on the line; so this should be an array init
     {
-      basic_arrays[r].setString(args[0], Param3);
+        //{  PrintAndWebOut(F("Array: missing = on the line"));  return; }      
+      Param1 = Param0.substring(0, r); // array name
+      Param1.trim();
+  //    Serial.println("array name " + Param1 );
+      Param2 = inData.substring(r+1 ,i);  // arguments
+  //    Serial.println("arguments " +  Param2);
+      r = ExtractArguments(Param2);
+      DeAllocateArguments();
+      if (num_args != 1) 
+        {  PrintAndWebOut(F("Array: number of arguments must be 1"));  return; }
+  
+      Param3 = evaluate(inData.substring( eq + 1 ));
+  
+      if ( (r = Search_Array(Param1)) == -1)
+          {  PrintAndWebOut(F("Array not defined"));  return; }
+  
+      if (basic_arrays[r].Format == PARSER_STRING) // string format
+      {
+        basic_arrays[r].setString(args[0], Param3);
+      }
+      else
+      {
+        basic_arrays[r].setFloat(args[0], atof(Param3.c_str()));
+      }
+      return;
     }
-    else
-    {
-      basic_arrays[r].setFloat(args[0], atof(Param3.c_str()));
-    }
-    return;
   }
 
   // let command down here for a reason
@@ -1427,11 +1429,13 @@ void ExicuteTheCurrentLine()
   }
   //Serial.println(RunningProgramCurrentLine);
   //Param0 = getValue(inData, ' ', 0);
-  // removed as this cause a lot of crash
-//  if ( inData != "") {
-//    ///evaluate(inData);//will exicure any functions if no other commands were found.
-//    return;
-//  }
+
+  if ( inData != "") {
+    evaluate(inData);//will execute any functions if no other commands were found.
+    // if the result is PARSER_FALSE, this means that the function hasn't been recognised
+    if (parser_result != PARSER_FALSE)
+      return;
+  }
   PrintAndWebOut(String(F("syntax error on line ")) + String(RunningProgramCurrentLine));
   RunningProgram = 0;
   //WaitForTheInterpertersResponse = 1;
