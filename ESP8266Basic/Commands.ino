@@ -142,7 +142,7 @@ void ExicuteTheCurrentLine()
     Param2.trim();
     Param3 = Param1.substring(r + 1);
     Param3.trim();
-    SetMeThatVar(Param2, evaluate(Param3));
+    SetMeThatVar(Param2, evaluate(Param3), PARSER_TRUE);
     return;
   }
 
@@ -186,7 +186,7 @@ void ExicuteTheCurrentLine()
         {
           RunningProgramCurrentLine = ForNextReturnLocations[i];
 
-          SetMeThatVar(Param1, evaluate(Param1 + "+1"));
+          SetMeThatVar(Param1, evaluate(Param1 + "+1"), PARSER_TRUE);
           break;
         }
         else
@@ -244,11 +244,7 @@ void ExicuteTheCurrentLine()
 
   if (Param0 == F("memclear"))
   {
-    for (byte i = 0; i < 50; i++)
-    {
-      AllMyVaribles[i][0] = "";
-      AllMyVaribles[i][1] = "";
-    }
+    deleteVariables();
     return;
   }
 
@@ -298,7 +294,7 @@ void ExicuteTheCurrentLine()
   if ( Param0 == F("pi"))
   {
 
-    SetMeThatVar(Param2, String(UniversalPinIO("pi", GetMeThatVar(Param1), 0)));
+    SetMeThatVar(Param2, String(UniversalPinIO("pi", GetMeThatVar(Param1), 0)), PARSER_TRUE);
     return;
   }
 
@@ -322,7 +318,7 @@ void ExicuteTheCurrentLine()
 
   if ( Param0 == F("pwi"))
   {
-    SetMeThatVar(Param2, String(UniversalPinIO("pwi", VarialbeLookup(Param1), 0)));
+    SetMeThatVar(Param2, String(UniversalPinIO("pwi", VarialbeLookup(Param1), 0)), PARSER_TRUE);
     return;
   }
 
@@ -335,6 +331,15 @@ void ExicuteTheCurrentLine()
     return;
   }
 
+  if ( Param0 == F("pwmfreq"))
+  {
+
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    valParam1 = evaluate(Param1).toInt();
+    if ((valParam1 > 0) && (valParam1 <= 8000))
+      analogWriteFreq(valParam1);
+    return;
+  }
 
   if ( Param0 == "temp" | Param0 == "ti")
   {
@@ -343,14 +348,14 @@ void ExicuteTheCurrentLine()
     // request to all devices on the bus
     sensors.requestTemperatures(); // Send the command to get temperatures
 
-    SetMeThatVar(Param2, String(sensors.getTempCByIndex(valParam1)));
+    SetMeThatVar(Param2, String(sensors.getTempCByIndex(valParam1)), PARSER_TRUE);
     return;
   }
 
 
   if ( Param0 == F("ai"))
   {
-    SetMeThatVar(Param1, String(analogRead(A0)));
+    SetMeThatVar(Param1, String(analogRead(A0)), PARSER_TRUE);
     return;
   }
 
@@ -368,7 +373,7 @@ void ExicuteTheCurrentLine()
   //Feading and writing variables to flash memory
   if ( Param0 == F("read"))
   {
-    SetMeThatVar(Param2, LoadDataFromFile(GetMeThatVar(Param1)));
+    SetMeThatVar(Param2, LoadDataFromFile(GetMeThatVar(Param1)), PARSER_STRING);
     return;
   }
 
@@ -378,24 +383,6 @@ void ExicuteTheCurrentLine()
     SaveDataToFile(GetMeThatVar(Param1), VarialbeLookup(Param2));
     return;
   }
-
-
-  if ( Param0 == F("comando"))
-  {
-    r = ExtractArguments(inData);
-
-    if (num_args == 2)
-    {
-      if (isnan(args[0]))
-        Serial.println(*args_str[0]);
-      if (isnan(args[1]))
-        Serial.println(*args_str[1]);
-    }
-    DeAllocateArguments();
-    return;
-  }
-
-
 
   if ( Param0 == F("delay"))
   {
@@ -587,7 +574,7 @@ void ExicuteTheCurrentLine()
 
   if (Param0 == F("wprint") | Param0 == F("html"))
   {
-     Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
+    Param1 = inData.substring(Param0.length() + 1);    // starts just after the command
     Param1 = evaluate(Param1);
     HTMLout += Param1;
     //Serial.print(HTMLout);
@@ -633,7 +620,7 @@ void ExicuteTheCurrentLine()
     VarialbeLookup(Param1);
     if (VariableLocated == 0)
     {
-      SetMeThatVar(Param1, "");
+      SetMeThatVar(Param1, "", PARSER_STRING);
       GetMeThatVar(Param1);
     }
 
@@ -651,7 +638,7 @@ void ExicuteTheCurrentLine()
     VarialbeLookup(Param1);
     if (VariableLocated == 0)
     {
-      SetMeThatVar(Param1, "");
+      SetMeThatVar(Param1, "", PARSER_STRING);
       GetMeThatVar(Param1);
     }
 
@@ -669,7 +656,7 @@ void ExicuteTheCurrentLine()
     VarialbeLookup(Param1);
     if (VariableLocated == 0)
     {
-      SetMeThatVar(Param1, "");
+      SetMeThatVar(Param1, "", PARSER_STRING);
       GetMeThatVar(Param1);
     }
     tempSlider.replace(F("variablevalue"),  String(F("VARS|")) + String(LastVarNumberLookedUp));
@@ -710,7 +697,7 @@ void ExicuteTheCurrentLine()
     Param2 = GetMeThatVar(Param2);
     if (VariableLocated == 0)
     {
-      SetMeThatVar(Param2, "");
+      SetMeThatVar(Param2, "", PARSER_STRING);
       GetMeThatVar(Param2);
     }
 
@@ -874,17 +861,32 @@ void ExicuteTheCurrentLine()
   {
     if (Param2 == "")
     {
-      SetMeThatVar(Param1, getSerialInput());
+      SetMeThatVar(Param1, getSerialInput(), PARSER_STRING);
     }
     else
     {
       Serial.print(GetMeThatVar(Param1));
-      SetMeThatVar(Param2, getSerialInput());
+      SetMeThatVar(Param2, getSerialInput(), PARSER_STRING);
     }
     //PrintAndWebOut("");
     return;
   }
 
+  if (Param0 == F("serialinput"))
+  {
+    Param2 = "";
+    delay(10);
+    //Serial.println("serialinput passage");
+    while (Serial.available() > 0)
+    {
+      char received = Serial.read();
+      Param2.concat(received);
+      delay(0);
+    }
+    SetMeThatVar(Param1, Param2, PARSER_STRING);
+    return;
+  }
+  
   if (Param0 == F("serialflush"))
   {
 
@@ -954,6 +956,7 @@ void ExicuteTheCurrentLine()
   {
     RunningProgramCurrentLine = ReturnLocations[NumberOfReturns];
     NumberOfReturns = NumberOfReturns - 1;
+    SerialBranchLine = abs(SerialBranchLine); // restore the serialbranch command
     return;
   }
 
@@ -1058,7 +1061,7 @@ void ExicuteTheCurrentLine()
     int str_len = Param1.length() + 1;
     char MgetToTest[str_len];
     Param1.toCharArray(MgetToTest, str_len);
-    SetMeThatVar(Param2, GetRidOfurlCharacters(server.arg( MgetToTest  )));
+    SetMeThatVar(Param2, GetRidOfurlCharacters(server.arg( MgetToTest  )), PARSER_STRING);
     return;
   }
 
@@ -1191,8 +1194,182 @@ void ExicuteTheCurrentLine()
     return;    
   }
 
+  if (Param0 == F("serialbranch"))
+  {
+    SerialBranchLine = 0;
+    for (int i = 1; i <= TotalNumberOfLines; i++) 
+    {
+      String gotoTest = BasicProgram(i);
+      gotoTest.trim();
+      if (fileOpenFail == 1) break;
+      if (gotoTest == Param1 | String(gotoTest + ":") == Param1 )
+      {
+          SerialBranchLine = i - 1;
+          break;
+      }
+    }
+    if (SerialBranchLine == 0)
+      PrintAndWebOut(F("SerialBranch line not found!"));
+    //Serial.print("serialbranch");
+    //Serial.println(SerialBranchLine);
+    return;    
+  }
   ////////////////////////////
   
+  /////// NEW mid STUFF //////
+  if ( Param0.startsWith(F("mid(")) )
+  {
+//    Serial.println("mid start");
+    // find the closing paranthesys
+    int num_par = 1;
+    int i;
+    for (i = 4; i < inData.length(); i++)
+    {
+      if ( inData[i] == '(' ) num_par++;
+      if ( inData[i] == ')' ) num_par--;
+      if (num_par == 0) break;
+    }
+    if (num_par != 0)  // no closing parenthesys ->Error
+      {  PrintAndWebOut(F("Mid: missing closing parenthesys"));  return; }
+    // check if the '=' follow
+    int eq = inData.indexOf('=', i);
+    if (eq == -1) // missing = on the line
+      {  PrintAndWebOut(F("Mid: missing = on the line"));  return; }
+    Param1 = inData.substring(4 , i);
+//    Serial.println(Param1);
+    r = ExtractArguments(Param1);
+    DeAllocateArguments();
+    if ( (num_args != 2) && (num_args != 3) )
+      {  PrintAndWebOut(F("Mid: number of arguments not valid"));  return; }
+     
+//    Serial.println("mid in");
+
+    // we need to check if the args are valid
+    // first we must extract the variable name
+    int com = inData.indexOf(',');
+    Param2 = inData.substring(4, com);
+    Param2.trim();
+//    Serial.println("variable is " + Param2);
+    r = VariablePosition(Param2);
+    if (r == -1)
+      {  PrintAndWebOut(F("Mid: destination variable not defined"));  return; }
+     
+    Param3 = evaluate(inData.substring( eq + 1 ));
+    if (parser_result != PARSER_STRING)
+      { PrintAndWebOut(F("Mid: set value must be string"));  return; }
+//    Serial.println("eval is " + Param3);
+
+    if  (num_args == 2)
+      args[2] = Param3.length();
+    Param4 = AllMyVariables[r].getVar();
+    Param4 = Param4.substring(0, args[1]-1) + Param3.substring(0, args[2]) + Param4.substring(args[1]-1 + args[2]);
+    AllMyVariables[r].setVar(Param4);
+    return;
+  }
+
+
+  /// DIM STUFF //////////
+
+  if (Param0 == F("dim"))
+  {
+    if ((r = inData.indexOf('(')) != -1) // there is a parenthesys in the command; maybe it's dim command
+    {
+      // find the closing paranthesys
+      int num_par = 1;
+      int i;
+      for (i = r+1 ; i < inData.length(); i++)
+      {
+        if ( inData[i] == '(' ) num_par++;
+        if ( inData[i] == ')' ) num_par--;
+        if (num_par == 0) break;
+      }
+      if (num_par != 0)  // no closing parenthesys ->Error
+        {  PrintAndWebOut(F("DIM: missing closing parenthesys"));  return; }
+
+      Param1 = inData.substring(3, r); // array name
+      Param1.trim();
+//      Serial.println("array name " + Param1 );
+      if (Param1 == "") 
+        {  PrintAndWebOut(F("DIM: the array name is missing"));  return; }
+      Param2 = inData.substring(r+1 ,i);  // arguments
+//      Serial.println("arguments " +  Param2);
+      r = ExtractArguments(Param2);
+      DeAllocateArguments();
+      if (num_args != 1) 
+        {  PrintAndWebOut(F("DIM: number of arguments must be 1"));  return; }
+
+      // here we are OK, we can create the array; for the moment array with $ are string, without float
+      // we should check before if the same array name exists
+      if (Search_Array(Param1) != -1)
+        {  PrintAndWebOut(F("DIM: array already defined - use UNDIM to delete before"));  return; }
+
+      if ( (r = Search_First_Available_Array()) == -1)
+         {  PrintAndWebOut(F("DIM: no more array space available"));  return; }
+
+      // determine if the arrays is number or string
+      if ((Param1.indexOf('$') != -1) || (inData.indexOf(F("as string")) != -1))
+        basic_arrays[r].dim(Param1, Param2.toInt(), PARSER_STRING);
+      else
+        basic_arrays[r].dim(Param1, Param2.toInt(), PARSER_TRUE);
+    }
+    return;
+  }
+
+  if (Param0 == F("undim"))
+  {
+    // remove an already dimensioned array; maybe the name "undim" should be modified 
+    if ( (r = Search_Array(Param1)) == -1)
+        {  PrintAndWebOut(F("UNDIM: array not defined"));  return; }
+        
+    basic_arrays[r].remove();
+    return;
+  }
+
+  
+  /// NEW array identification //
+  if ((r = Param0.indexOf('(')) != -1) // there is a parenthesys in the command; maybe it's an array
+  {
+    // find the closing parenthesys
+    int num_par = 1;
+    int i;
+    for (i = r+1 ; i < inData.length(); i++)
+    {
+      if ( inData[i] == '(' ) num_par++;
+      if ( inData[i] == ')' ) num_par--;
+      if (num_par == 0) break;
+    }
+    if (num_par != 0)  // no closing parenthesys ->Error
+      {  PrintAndWebOut(F("Array: missing closing parenthesys"));  return; }
+    // check if the '=' follow
+    int eq = inData.indexOf('=', i);
+    if (eq == -1) // missing = on the line
+      {  PrintAndWebOut(F("Array: missing = on the line"));  return; }      
+    Param1 = Param0.substring(0, r); // array name
+    Param1.trim();
+//    Serial.println("array name " + Param1 );
+    Param2 = inData.substring(r+1 ,i);  // arguments
+//    Serial.println("arguments " +  Param2);
+    r = ExtractArguments(Param2);
+    DeAllocateArguments();
+    if (num_args != 1) 
+      {  PrintAndWebOut(F("Array: number of arguments must be 1"));  return; }
+
+    Param3 = evaluate(inData.substring( eq + 1 ));
+
+    if ( (r = Search_Array(Param1)) == -1)
+        {  PrintAndWebOut(F("Array not defined"));  return; }
+
+    if (basic_arrays[r].Format == PARSER_STRING) // string format
+    {
+      basic_arrays[r].setString(args[0], Param3);
+    }
+    else
+    {
+      basic_arrays[r].setFloat(args[0], atof(Param3.c_str()));
+    }
+    return;
+  }
+
   // let command down here for a reason
 
   if ( Param1.startsWith(F("=")))
@@ -1201,7 +1378,7 @@ void ExicuteTheCurrentLine()
   }
 
   if ( Param0.indexOf('=') > 1 )
-  { Serial.println("Found the  = sign");
+  { //Serial.println("Found the  = sign");
     inData.replace(F("="), F(" = "));
     Param0 = "let";
   }
@@ -1245,15 +1422,18 @@ void ExicuteTheCurrentLine()
     Param3 = evaluate(Param2);
     //    Serial.print("risultato ");
     //    Serial.println(Param3);
-    SetMeThatVar(Param1, Param3);
+    SetMeThatVar(Param1, Param3, parser_result);
     return;
   }
   //Serial.println(RunningProgramCurrentLine);
   //Param0 = getValue(inData, ' ', 0);
-  if ( inData != "") {
-    evaluate(inData);//will exicure any functions if no other commands were found.
-    return;
-  }
+  // removed as this cause a lot of crash
+//  if ( inData != "") {
+//    ///evaluate(inData);//will exicure any functions if no other commands were found.
+//    return;
+//  }
   PrintAndWebOut(String(F("syntax error on line ")) + String(RunningProgramCurrentLine));
+  RunningProgram = 0;
+  //WaitForTheInterpertersResponse = 1;
   return;
 }

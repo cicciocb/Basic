@@ -36,10 +36,10 @@ String RunningProgramGui()
     Serial.println( HTMLout);
   }
 
-  for (int i = 50; i >= 0; i--)
+  for (int i = TotalNumberOfVariables - 1; i >= 0; i--)
   {
     delay(0);
-    WebOut.replace(String(F("VARS|")) + String(i), AllMyVaribles[i][1]);
+    WebOut.replace(String(F("VARS|")) + String(i), AllMyVariables[i].getVar());
   }
 
 
@@ -57,7 +57,15 @@ String RunningProgramGui()
 void PrintAndWebOut(String itemToBePrinted)
 {
   Serial.println(itemToBePrinted);
-  HTMLout = String(HTMLout + "<hr>" + itemToBePrinted);
+  itemToBePrinted.replace(' ' , char(160));
+  if (HTMLout.length() < 4000)
+    HTMLout = String(HTMLout + "<hr>" + itemToBePrinted);  
+  else
+  {
+    HTMLout = String(HTMLout + String(F("<hr> BUFFER TOO BIG! PROGRAM STOPPED")));  
+    Serial.println(F("BUFFER TOO BIG! PROGRAM STOPPED"));
+    RunningProgram = 0;
+  }
   return;
 }
 
@@ -176,7 +184,7 @@ void CheckFOrWebVarInput()
   String bla;
 
 
-  for (int i = 0; i < 50; i++)
+  for (int i = 0; i < TotalNumberOfVariables; i++)
   {
     int str_len = String(i).length() + 1;
     char ArgumentToTest[str_len];
@@ -185,7 +193,7 @@ void CheckFOrWebVarInput()
     bla = server.arg(ArgumentToTest);
     if (bla.length() > 0)
     {
-      AllMyVaribles[i][1] = GetRidOfurlCharacters(bla);
+      AllMyVariables[i].setVar(GetRidOfurlCharacters(bla));
     }
   }
   return;

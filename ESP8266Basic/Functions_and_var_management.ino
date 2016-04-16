@@ -8,12 +8,12 @@ String VarialbeLookup(String VariableNameToFind)
 {
   VariableLocated = 0;
   String MyOut = VariableNameToFind;
-  for (byte i = 0; i < 50; i++)
+  for (int i = 0; i < TotalNumberOfVariables; i++)
   {
-    if (AllMyVaribles[i][0] == VariableNameToFind)
+    if (AllMyVariables[i].getName() == VariableNameToFind)
     {
       delay(0);
-      MyOut =  AllMyVaribles[i][1];
+      MyOut =  AllMyVariables[i].getVar();
       LastVarNumberLookedUp = i;
       VariableLocated = 1;
       break;
@@ -22,98 +22,68 @@ String VarialbeLookup(String VariableNameToFind)
   return MyOut;
 }
 
-void SetMeThatVar(String VariableNameToFind, String NewContents)
+int VariablePosition(String VariableNameToFind)
+{
+  for (int i = 0; i < TotalNumberOfVariables; i++)
+  {
+    if (AllMyVariables[i].getName() == VariableNameToFind)
+      return i;
+  }
+  return -1;
+}
+
+
+void SetMeThatVar(String VariableNameToFind, String NewContents, int format)
 {
   NewContents = GetRidOfurlCharacters(NewContents);
-  byte varnotset = 1;
-  for (byte i = 0; i < 50; i++)
+  for (int i = 0; i < TotalNumberOfVariables; i++)
   {
-    if (AllMyVaribles[i][0] == VariableNameToFind)
+    if (AllMyVariables[i].getName() == VariableNameToFind)
     {
-      AllMyVaribles[i][1] = NewContents;
-      varnotset = 0;
+        AllMyVariables[i].setVar(NewContents);
+        AllMyVariables[i].Format = format;
+        return;
     }
   }
 
-  if (varnotset == 1)
+  for (int i = 0; i < TotalNumberOfVariables; i++)
   {
-    for (byte i = 0; i < 50; i++)
+    if (AllMyVariables[i].getName() == "")
     {
-      if (AllMyVaribles[i][0] == "")
-      {
-        AllMyVaribles[i][0] = VariableNameToFind;
-        AllMyVaribles[i][1] = NewContents;
-        i = 51;
-      }
+      AllMyVariables[i].setName(VariableNameToFind);
+      AllMyVariables[i].setVar(NewContents);
+      AllMyVariables[i].Format = format;
+      return;
     }
   }
+
 }
-
-
-String Mid(String str, int pos1, int pos2)
-{
-  if (str.length() < pos1 + pos2) pos2 = str.length() - pos1;
-  int i;
-  String temp = "";
-  for (i = pos1; i < pos1 + pos2; i++)
-  {
-    temp += str.charAt(i);
-  }
-
-  return temp;
-}
-
-
-
-String Left(String str, int pos)
-{
-  int i;
-  String temp = "";
-  for (i = 0; i < pos; i++)
-  {
-    temp += str.charAt(i);
-  }
-
-  return temp;
-}
-
-
-String Right(String str, int pos)
-{
-  int i;
-  String temp = "";
-  for (i = strlen(str.c_str()) - pos; i < strlen(str.c_str()); i++)
-  {
-    temp += str.charAt(i);
-  }
-  return temp;
-}
-
-
-
-
-int StrToHex( String StringToConvert )
-
-{
-  int str_len = StringToConvert.length() + 1;
-  char input[str_len];
-  StringToConvert.toCharArray(input, str_len);
-  return (int) strtol( input, 0, 16);
-}
-
-
 
 void PrintAllMyVars()
 {
   PrintAndWebOut(F("Variable Dump"));
-  for (byte i = 0; i < 50; i++)
+  for (int i = 0; i < TotalNumberOfVariables; i++)
   {
-    PrintAndWebOut(String(AllMyVaribles[i][0] + " = " + AllMyVaribles[i][1]));
+    PrintAndWebOut(AllMyVariables[i].getName() + String(F(" = ")) + (AllMyVariables[i].Format == PARSER_STRING ? "\"" :"") + 
+                   AllMyVariables[i].getVar() +                     (AllMyVariables[i].Format == PARSER_STRING ? "\"" :"") );
   }
   return;
 }
 
 
-
+void deleteVariables()
+{
+  int i;
+  for (i = 0; i < TotalNumberOfVariables; i++)
+  {
+    AllMyVariables[i].remove();
+    AllMyVariables[i].Format = PARSER_FALSE;
+  }
+  for (i = 0; i < TotalNumberOfArrays; i++)
+  {
+    basic_arrays[i].remove();
+  }
+  return;    
+}
 
 

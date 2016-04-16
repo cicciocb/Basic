@@ -1,0 +1,146 @@
+Release notes version cicciocb alpha 11:
+fix parser single "
+fix snag into web_gui_stuff.ino
+dynamic memory handling for variables : more free ram available
+introduction of function dim(a$,5,1) = "J"
+introduction of arrays
+the arrays can be string or float
+dim a(100) => declare a float
+dim a$(50) => declare a string
+dim b(200) as string    => declare a string
+undim a   =>  clear the content of the buffer a
+memclear =>  clear all the variables including the arrays
+
+fix spaces printed on the html: now print "   AAAA    " is displayed as it should
+
+new commands for serial port
+serialinput var =>  get into var the byte received from the serial port (port 1)
+serialbranch label  => jumps to the label as soon as serial data are received; 
+
+instr() with 3rd optional argument
+instrrev() with 3rd optional argument
+increased the nb of max led neopixel to 512
+
+
+
+// some test code for the new functionalities 
+
+
+'''''''''''''''''''''''''''''''''''''''''''''
+'This is to test the Arrays
+'''''''''''''''''''''''''''''''''''''''''''''
+memclear
+print ramfree()
+dim a(100)
+
+a(0) = 10
+a(1) = 20
+a(2) = "pollo"
+
+print a(0)
+print a(1)
+print a(2)
+print a(100)
+
+dim b$(10)
+
+b$(1) = "ciao"
+b$(2) = "bambina"
+' a number into a string array will be converted to string 30 -> "30"
+b$(3) = 30
+print b$(1)
+print b$(2)
+print b$(3)
+
+dim c(10)
+c(1) = 1
+c(2) = 654
+' a string into a float array will be treated as 0
+c(3) = "ciao"
+print c(1) 
+print  c(2) 
+print  c(3) 
+
+undim a
+undim b$
+undim c
+
+dim a$(100) as string
+a$(0) = "This"
+a$(1) = "Is"
+a$(2) = "My"
+a$(3) = "First"
+a$(4) = "String"
+a$(5) = "Array"
+a$(6) = "Example"
+a$(7) = "1234"
+print ramfree()
+
+n = 7
+'print the content of the array
+for i=0 to n
+serialprintln left( a$(i) , 2)
+next i
+
+' this is a simple bubble sort algo
+for i = 0 to n
+for j = i+1 to n
+if a$(i) < a$(j) then goto [prox]
+t = a$(i)
+a$(i) = a$(j)
+a$(j) = t
+[prox]
+next j
+next i
+
+'print the content of the array sorted
+for i=0 to n
+serialprintln a$(i)
+next i
+
+'create a big float array
+dim big(1000)
+for i=0 to 1000
+big(i) = i * 2
+next i
+
+for i=0 to 1000
+serialprintln big(i)
+next i
+
+end
+
+'''''''''''''''''''''''''''''''''''''''''''''
+'This is to test the serial port interrupt
+' 
+' to test it, simply type keys into the 
+' terminal emulator on the serial port
+'''''''''''''''''''''''''''''''''''''''''''''
+
+memclear
+print ramfree()
+serialbranch [serialin]
+wait
+
+[serialin]
+serialinput zz$
+Serialprint “received:”
+serialprintln zz$
+return
+
+'''''''''''''''''''''''''''''''''''''''''''''
+'Test for MID= and instr instrrev
+' instrrev search string from the end (reverse)
+'''''''''''''''''''''''''''''''''''''''''''''
+
+a = "12345678901234567890"
+mid( a , 10, 2 ) = "GIORGIO"
+print a
+
+print instr(a, "78")
+print instrrev(a, "78")
+
+print instr(a, "78", 10)
+print instrrev(a, "78", 10)
+end
+

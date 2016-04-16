@@ -1,4 +1,4 @@
-//ESP8266 Basic Interperter
+///ESP8266 Basic Interpreter
 //HTTP://ESP8266BASIC.COM
 //
 //The MIT License (MIT)
@@ -52,7 +52,7 @@
 #include "ESP8266httpUpdate.h"
 #include <time.h>
 //#include <HttpClient.h>                   // that line needs to be commented for esp8266-2.0.0-rc1
-#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
+//#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
 
 //LCD Stuff
 #include <LiquidCrystal_SR.h>
@@ -71,14 +71,13 @@
 #include <Time.h>
 
 #include <Adafruit_NeoPixel.h>
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(512, 15, NEO_GRB + NEO_KHZ800);;
 
-
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(256, 15, NEO_GRB + NEO_KHZ800);;
 
 //ThingSpeak Stuff
 
 
-const char BasicVersion[] = "ESP Basic 2.0.Alpha 6 CiccioCB";
+const char BasicVersion[] = "ESP Basic 2.0.Alpha cicciocb 11";
 
 
 
@@ -90,10 +89,15 @@ char* _parser_error_msg;
 //String Line_For_Eval;
 PARSER_PREC numeric_value;
 String string_value ;
-
+int parser_result;
 
 OneWire oneWire(2);
 DallasTemperature sensors(&oneWire);
+
+
+
+#include <DHT.h>   // adafruit library
+DHT dht(5, DHT21);   // 5 is GPIO5, DHT21 you may want change at DHT11 or DHT22
 
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE); // Set the LCD I2C address
 
@@ -205,7 +209,7 @@ function stocca(s)
 {
  Sendy += s;
  block++;
- if ((Sendy.length > 512) || (s == ">>-save_<<"))
+ if ((Sendy.length > 1024) || (s == ">>-save_<<"))
  {
   if (s == ">>-save_<<")
    Sendy = Sendy.substr(0,Sendy.length-10); 
@@ -307,22 +311,80 @@ String  UdpBuffer = "";
 IPAddress UdpRemoteIP;
 int UdpRemotePort;
 
+
+// place where the program will jump on serial data reception
+int SerialBranchLine = 0;
+
+
 // Buffer to store incoming commands from serial port
 String inData;
 
-int TotalNumberOfLines = 255;
-//String BasicProgram[255];                                //Array of strings to hold basic program
+const int TotalNumberOfLines = 5000;            //this is the maximum number of lines that can be saved/loaded; it can go until 65535
 
-String AllMyVaribles[50][2];
 int LastVarNumberLookedUp;                                 //Array to hold all of the basic variables
 bool VariableLocated;
 
+const int TotalNumberOfVariables = 50;
+#define VariablesNameLength  10
+class basicVariable
+{
+  private:
+  char *_name = NULL;
+  String *_Text = NULL;
+  float _Number;
+  
+  public:
+  byte Format = 0;
+
+  String getName()
+  {
+    if (_name != NULL)
+      return String(_name);
+    else
+      return String("");
+  }
+
+  void setName(String n)    // the name is max 'VariablesNameLength' chars long
+  {
+    if (_name == NULL)
+    {
+      _name = (char *) malloc(VariablesNameLength + 1);  // allocate a buffer for 11 chars (10 + \0)
+    }
+    strncpy(_name, n.c_str(), VariablesNameLength + 1);
+  }
+
+  String getVar()
+  {
+    if (_Text != NULL)
+      return *_Text;
+    else
+      return String("");
+  }
+
+  void setVar(String v)
+  {
+    if (_Text == NULL)
+      _Text = new String();
+
+    *_Text = v;
+  }
+  void remove()
+  {
+    delete _Text;
+    free(_name);
+    _Text = NULL;
+    _name = NULL;
+  }
+  
+} AllMyVariables[TotalNumberOfVariables];
+
+
 
 bool RunningProgram = 1;                                //Will be set to 1 if the program is currently running
-byte RunningProgramCurrentLine = 0;                     //Keeps track of the currently running line of code
+int RunningProgramCurrentLine = 0;                     //Keeps track of the currently running line of code
 byte NumberOfReturns;
 bool BasicDebuggingOn;
-byte ReturnLocations[254];
+uint16_t ReturnLocations[254];
 
 int TimerWaitTime;
 int timerLastActiveTime;
@@ -330,7 +392,7 @@ String TimerBranch;
 
 String refreshBranch;
 
-int GraphicsEliments[100][7];
+uint16_t GraphicsEliments[100][7];
 
 File fsUploadFile;
 
@@ -348,7 +410,7 @@ int SerialTimeOut;
 
 
 
-byte ForNextReturnLocations[255];
+uint16_t ForNextReturnLocations[255];
 
 
 
@@ -378,6 +440,7 @@ int dst = 0;
 FSInfo fs_info;
 
 void setup() {
+  dht.begin();
   pixels.begin();
   SPIFFS.begin();
   Serial.begin(9600);
@@ -407,6 +470,7 @@ void setup() {
   server.on("/vars", []()
   {
     String WebOut = AdminBarHTML;
+    String FixSpaces;
     if ( CheckIfLoggedIn() )
     {
       WebOut = LogInPage;
@@ -414,9 +478,12 @@ void setup() {
     else
     {
       WebOut += F("<div style='float: left;'>Variable Dump:");
-      for (byte i = 0; i < 50; i++)
+      for (int i = 0; i < TotalNumberOfVariables; i++)
       {
-        if (AllMyVaribles[i][0] != "" ) WebOut += String("<hr>" + AllMyVaribles[i][0] + " = " + AllMyVaribles[i][1]);
+        FixSpaces = AllMyVariables[i].getVar();
+        FixSpaces.replace(' ' , char(160));
+        if ( AllMyVariables[i].getName() != "") WebOut += String("<hr>" + AllMyVariables[i].getName() + " = " + (AllMyVariables[i].Format == PARSER_STRING ? "\"" : "") +
+                                                                                            FixSpaces         + (AllMyVariables[i].Format == PARSER_STRING ? "\"" : "") );
       }
 
 
@@ -519,7 +586,7 @@ void setup() {
           if ( (i > TotalNumberOfLines) || (fileOpenFail == 1) )
           {
             fileOpenFail = 0;
-            iii = 9999;
+            iii = 99999;
             break;
           }
 
@@ -555,16 +622,16 @@ void setup() {
   });
 
 
-  server.on("/filelist", []() 
+  server.on("/filelist", []()
   {
     String ret = "";
     String fn;
     Dir dir = SPIFFS.openDir(String(F("/") ));
-    while (dir.next()) 
+    while (dir.next())
     {
-      fn = dir.fileName();  
+      fn = dir.fileName();
       if (fn.indexOf(F(".bas")) != -1)
-        ret +=  fn +"\n";
+        ret +=  fn + "\n";
       delay(0);
     }
 
@@ -573,11 +640,11 @@ void setup() {
   });
 
   server.on("/codein", []() {
-//    ProgramName.trim();
-//    if (ProgramName == "")
-//    {
-//      ProgramName = F("/default.bas");
-//    }
+    //    ProgramName.trim();
+    //    if (ProgramName == "")
+    //    {
+    //      ProgramName = F("/default.bas");
+    //    }
 
     if (server.arg("SaveTheCode") == F("start"))
     {
@@ -586,10 +653,10 @@ void setup() {
       Serial.println(F("start save"));
       ProgramName = GetRidOfurlCharacters(server.arg("FileName"));
       if (ProgramName == "")
-          ProgramName = F("/default.bas");
+        ProgramName = F("/default.bas");
       ProgramName.trim();
       if (ProgramName[0] != '/')
-          ProgramName = "/" + ProgramName;
+        ProgramName = "/" + ProgramName;
       OpenToWriteOnFlash( ProgramName );
     }
 
@@ -832,13 +899,21 @@ String getContentType(String filename) {
 
 void StartUpProgramTimer()
 {
-  while  (millis() < 60000)
+  pinMode(0, INPUT_PULLUP);  // set GPIO0 to input with pullup; so if float should read 1, 0 on ground
+  while  (millis() < 30000)
   {
     delay(0);
     //Serial.println(millis());
     server.handleClient();
     if (WaitForTheInterpertersResponse == 0) return;
+
+    // MOD cicciocb April 2016
+    // if the pin GPIO0 is taken to GND, the program will not start
+    if (digitalRead(0) == 0)  return; // if the pin GPIO0 is at GND , stop the autorun
   }
+
+
+
   Serial.println(F("Starting Default Program"));
   RunningProgram = 1;
   RunningProgramCurrentLine = 0;
@@ -1114,8 +1189,8 @@ void runTillWaitPart2()
     //Serial.println(RunningProgramCurrentLine);
     CheckForUdpData();
   }
-   
-    
+
+
 }
 
 String StripCommentsFromLine(String ret)
@@ -1144,33 +1219,48 @@ String StripCommentsFromLine(String ret)
 void CheckForUdpData()
 {
   int numBytes = udp.parsePacket();
-  if ( numBytes) 
+  if ( numBytes)
   {
-//    Serial.print("Packet received ");
-//    Serial.print(RunningProgramCurrentLine);
-//    Serial.print("  ");
-//    Serial.println(udp.available());
+    //    Serial.print("Packet received ");
+    //    Serial.print(RunningProgramCurrentLine);
+    //    Serial.print("  ");
+    //    Serial.println(udp.available());
 
     if (numBytes > 0)
     {
       char Buffer[numBytes + 1];
       UdpRemoteIP = udp.remoteIP();
       UdpRemotePort = udp.remotePort();
-      delay(0);      
+      delay(0);
       udp.read(Buffer, numBytes);
       Buffer[numBytes] = '\0'; // terminate the string with '\0'
       UdpBuffer = String(Buffer);
     }
-    
+
     //// test of gosub ///////
     if (UdpBranchLine != 0)
     {
       NumberOfReturns = NumberOfReturns + 1;
       ReturnLocations[NumberOfReturns] = RunningProgramCurrentLine - WaitForTheInterpertersResponse;  // if the program is in wait, it returns to the previous line to wait again
-      WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub      
+      WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
       RunningProgramCurrentLine = UdpBranchLine + 1; // gosub after the udpbranch label
     }
-  }  
+  }
+  //// 
+  if (Serial.available() > 0)
+  {
+    delay(50); // insure that the data can be received
+    //Serial.print("Serial.available() " +  String(Serial.available()));
+    //// test of gosub ///////
+    if (SerialBranchLine > 0)
+    {
+      NumberOfReturns = NumberOfReturns + 1;
+      ReturnLocations[NumberOfReturns] = RunningProgramCurrentLine - WaitForTheInterpertersResponse;  // if the program is in wait, it returns to the previous line to wait again
+      WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
+      RunningProgramCurrentLine = SerialBranchLine + 1; // gosub after the SerialBranch label
+      SerialBranchLine = - SerialBranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
+    }
+  }
 }
 
 String getValueforPrograming(String data, char separator, int index)
@@ -1403,7 +1493,7 @@ String FetchWebUrl(String URLtoGet, int PortNoForPage)
   String str = "             ";
   String ServerToConnectTo = URLtoGet.substring(0, URLtoGet.indexOf("/"));
   String PageToGet = URLtoGet.substring(URLtoGet.indexOf("/"));
-  byte numberOwebTries;
+  byte numberOwebTries = 0;
   // ServerToConnectTo ;
   //PageToGet = URLtoGet.substring(URLtoGet.indexOf("/"));
 
@@ -1414,14 +1504,11 @@ String FetchWebUrl(String URLtoGet, int PortNoForPage)
   if (client.connect(ServerToConnectTo.c_str() , PortNoForPage))
   {
     client.print(String("GET " + PageToGet + " HTTP/1.1\r\nHost: " +  ServerToConnectTo + "\r\n\r\n"));
-    delay(3500);
-    //    while ( ! client.available() && numberOwebTries < 10 ) {
-    //      numberOwebTries++;
-    //      delay(1000);   // 1 second
-    //    }
-
-
-
+    // wait for maximum 12 x 300msec = 3.6 seconds
+    while ( ! client.available() && numberOwebTries < 12 ) {
+      numberOwebTries++;
+      delay(300);   // 300ms
+    }
 
     while (client.available())
     {
@@ -1430,6 +1517,12 @@ String FetchWebUrl(String URLtoGet, int PortNoForPage)
 
       str.concat( (const char)client.read());
       delay(0);
+      if (client.available() == false)
+      {
+        // if no data, wait for 300ms hoping that new data arrive
+        delay(300);
+      }
+
     }
 
 
