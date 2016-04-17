@@ -77,7 +77,7 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(512, 15, NEO_GRB + NEO_KHZ800);;
 //ThingSpeak Stuff
 
 
-const char BasicVersion[] = "ESP Basic 2.0.Alpha cicciocb 12";
+const char BasicVersion[] = "ESP Basic 2.0.Alpha cicciocb 13";
 
 
 
@@ -1238,12 +1238,13 @@ void CheckForUdpData()
     }
 
     //// test of gosub ///////
-    if (UdpBranchLine != 0)
+    if (UdpBranchLine > 0)
     {
       NumberOfReturns = NumberOfReturns + 1;
       ReturnLocations[NumberOfReturns] = RunningProgramCurrentLine - WaitForTheInterpertersResponse;  // if the program is in wait, it returns to the previous line to wait again
       WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
       RunningProgramCurrentLine = UdpBranchLine + 1; // gosub after the udpbranch label
+      UdpBranchLine = - UdpBranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
     }
   }
   //// 

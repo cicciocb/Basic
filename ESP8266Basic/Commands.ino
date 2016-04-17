@@ -956,6 +956,7 @@ void ExicuteTheCurrentLine()
   {
     RunningProgramCurrentLine = ReturnLocations[NumberOfReturns];
     NumberOfReturns = NumberOfReturns - 1;
+    UdpBranchLine = abs(UdpBranchLine); // restore the udpBranch command
     SerialBranchLine = abs(SerialBranchLine); // restore the serialbranch command
     return;
   }
