@@ -193,6 +193,7 @@ void CheckFOrWebVarInput()
     bla = server.arg(ArgumentToTest);
     if (bla.length() > 0)
     {
+      bla.replace('+', ' ');
       AllMyVariables[i].setVar(GetRidOfurlCharacters(bla));
     }
   }

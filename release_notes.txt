@@ -1,146 +1,364 @@
-Release notes version cicciocb alpha 11:
-fix parser single "
-fix snag into web_gui_stuff.ino
-dynamic memory handling for variables : more free ram available
-introduction of function dim(a$,5,1) = "J"
-introduction of arrays
-the arrays can be string or float
-dim a(100) => declare a float
-dim a$(50) => declare a string
-dim b(200) as string    => declare a string
-undim a   =>  clear the content of the buffer a
-memclear =>  clear all the variables including the arrays
+Release notes version cicciocb alpha 17:
 
-fix spaces printed on the html: now print "   AAAA    " is displayed as it should
+- New structure commands :
+   - if then else endif
+   - do loop {until | while}
 
-new commands for serial port
-serialinput var =>  get into var the byte received from the serial port (port 1)
-serialbranch label  => jumps to the label as soon as serial data are received; 
+- Improved for command :
+   - the step can be defined
 
-instr() with 3rd optional argument
-instrrev() with 3rd optional argument
-increased the nb of max led neopixel to 512
+- Improved handling for goto / gosub / return
+   - Now it's mandatory to have labels between square brackets like [LABEL1]
+   - The label length is limited to 30 characters
+
+- optimisation of ram memory
+   - more free memory available
+
+-improved error handling
+   - more verbose error messages
+   - program stops when error is captured
+   - wrongly nested 'for / next' ,  'if / else / endif',  'do / loop' are checked on open / save with associated warnings
+
+- Increased the max length for the variable names from 10 to 30
+
+- Addition of the <autorun> option in the 'Settings' page 
+
+- Improvement for the neopixel functions ; now it's possible to define the pin
+
+- Improvement for the dht functions ; now it's possible to define the sensor (DHT11, DHT21, DHT22) and the pin
+
+- Improvement for the function hex() ; now it's possible to define the number of digits
+
+- Addition of the command gpio1reset permitting to restore the serial port communication
+
+- addition of a full serialport #2 (can transmit and receive)
+
+- Addition of the SPI functions
 
 
+/////////////////////////////////////////////////////////////////////////////////////////
 
-// some test code for the new functionalities 
+Detailed informations:
+
+IF / THEN / ELSE / ENDIF
+========================
+
+Is possible to use structured 'if then else endif'.
+Example :
+
+a = 50
+b = 40
+c = 30
+d = 20
+e = 10
+
+if a > b then
+  print "a > b"
+  if b >c then
+    print "b > c"
+    if c > d then
+      print "c > d"
+      if d > e then
+        print "d > e "
+      else
+        print "d < e "
+      end if
+    else
+      print "c < d "   
+    end if
+  else
+  print "b < c"
+  end if
+else
+  print "a < b"
+end if
+'''''''''''''''''''
+
+The classic 'single line' is still valid such as :
+if a > b then print "a > b" else print "b > a"
+
+The 'end if' can be written also as 'endif'
+
+At each file save / file open, the nested levels are checked and the errors
+are printed; this permit to correct the code before run
+------------------------------------------------------------------------------------
+
+DO LOOP { UNTIL | WHILE } condition
+===================================
+
+Is possible to use structured do loops, using the until or while condition.
+Example (taken directly from Liberty Basic help)
+
+ 'count to 10 using "loop while" and "loop until"
+    
+a = 0
+b = 0
+
+do
+    print a
+    a = a + 1
+loop while a < 11
+print
+ 
+do
+    print b
+    b = b + 1
+loop until b = 11
+
+The loop is executed at least one time as the checking is done at the end of the loop.
+------------------------------------------------------------------------------------
+
+FOR / next improvements
+=======================
+
+Is possible to use the optional 'step' keyword.
+The value for step can be negative and not limited to integer value.
+The variable after the next keyword is optional
+
+Example :
+
+for index = 20 to 2 step -1
+   print index
+next index
+
+for x = 0 to 3.14 step 0.1
+   print  "The sine of " & x & " is " & sin(x)
+next 
+------------------------------------------------------------------------------------
+
+Addition of the <autorun> option in the 'Settings' page
+=======================================================
+A new option permit to disable the autorun of the 'default.bas' program.
+Very useful during debug phase. 
+------------------------------------------------------------------------------------
+
+Neopixel functions improvement
+==============================
+A new command 'neosetpin( pin )' permit to define the pin used for NEOPIXELS
+
+Example :
+
+neosetpin(5) will define GPIO5
+
+If neosetpin() is not used, the default pin remains GPIO15
+------------------------------------------------------------------------------------
+
+DHT sensors improvements
+========================
+A new command 'dht.setup( model, pin) permit to define the sensor mode and the pin used
+The model can be :
+11 for DHT11
+21 for DHT21
+22 for DHT22
+
+The pin can be any valid pin.
+
+Example (for DHT11 on pin GPIO4):
+
+dht.setup(11, 4)
+print dht.temp()
+print dht.hum()
+
+if dht.setup() is not used, the model and the pin are default to DHT21 and pin GPIO5
+------------------------------------------------------------------------------------
+
+Improvement for the function hex()
+==================================
+It is possible to add a 2nd optional argument to this function to define the number
+of characters generated.
+
+Example:
+
+print hex(12)		-> c
+print hex(12, 2)	-> 0c
+print hex(2170)		-> 87a
+print hex(2170, 4)	-> 087a
+print hex(2170, 6)	-> 00087a
+------------------------------------------------------------------------------------
+
+Addition of the command gpio1reset
+==================================
+The command 'gpio1reset() permit to recover the normal behaviour of the TX pin
+
+Example:
+
+for i = 1 to 5
+  po 1 0
+  delay 300
+  po 1 1
+  delay 300
+next i
+
+print "The serial port is blocked now"
+delay 300
+gpio1reset()
+
+print "The serial port is unlocked now"
+------------------------------------------------------------------------------------
+
+Addition of a full serialport #2
+===============================
+A new serial port has been included. This is now a software port so we can freely define
+the pins for the TX and the RX.
+The associated commands are :
+
+serial2begin speed, TX_pin, RX_pin
+   Open the serialport2 channel.
+   The speed can be any value up to 115200.
+   The TX_pin and RX_pin can be any valid pin (except GPIO16).
+   TX_pin and RX_pin are optional and default to 2 (TX_pin) and 12 (RX_pin)
+
+serial2end
+   Close the serialport2 channel.
+
+serial2print var
+   print the var
+ 
+serial2prinln
+   print the var adding <new line> at the end
+
+serial2input var
+   get into var the byte received from the serial port (port 2)
+
+serial2branch label
+   jumps to the label as soon as serial data are received (port 2)
 
 
-'''''''''''''''''''''''''''''''''''''''''''''
-'This is to test the Arrays
-'''''''''''''''''''''''''''''''''''''''''''''
+Example (taken from the serialport 1 example)
+
 memclear
 print ramfree()
-dim a(100)
-
-a(0) = 10
-a(1) = 20
-a(2) = "pollo"
-
-print a(0)
-print a(1)
-print a(2)
-print a(100)
-
-dim b$(10)
-
-b$(1) = "ciao"
-b$(2) = "bambina"
-' a number into a string array will be converted to string 30 -> "30"
-b$(3) = 30
-print b$(1)
-print b$(2)
-print b$(3)
-
-dim c(10)
-c(1) = 1
-c(2) = 654
-' a string into a float array will be treated as 0
-c(3) = "ciao"
-print c(1) 
-print  c(2) 
-print  c(3) 
-
-undim a
-undim b$
-undim c
-
-dim a$(100) as string
-a$(0) = "This"
-a$(1) = "Is"
-a$(2) = "My"
-a$(3) = "First"
-a$(4) = "String"
-a$(5) = "Array"
-a$(6) = "Example"
-a$(7) = "1234"
-print ramfree()
-
-n = 7
-'print the content of the array
-for i=0 to n
-serialprintln left( a$(i) , 2)
-next i
-
-' this is a simple bubble sort algo
-for i = 0 to n
-for j = i+1 to n
-if a$(i) < a$(j) then goto [prox]
-t = a$(i)
-a$(i) = a$(j)
-a$(j) = t
-[prox]
-next j
-next i
-
-'print the content of the array sorted
-for i=0 to n
-serialprintln a$(i)
-next i
-
-'create a big float array
-dim big(1000)
-for i=0 to 1000
-big(i) = i * 2
-next i
-
-for i=0 to 1000
-serialprintln big(i)
-next i
-
-end
-
-'''''''''''''''''''''''''''''''''''''''''''''
-'This is to test the serial port interrupt
-' 
-' to test it, simply type keys into the 
-' terminal emulator on the serial port
-'''''''''''''''''''''''''''''''''''''''''''''
-
-memclear
-print ramfree()
-serialbranch [serialin]
+serial2branch [serial2in]
 wait
 
-[serialin]
-serialinput zz$
-Serialprint “received:”
-serialprintln zz$
+[serial2in]
+serial2input zz$
+Serial2print “received:”
+serial2println zz$
+return
+------------------------------------------------------------------------------------
+
+Addition of the SPI functions
+=============================
+The SPI port has been enabled permitting to interface with SPI devices
+
+The associated pins are :
+
+SCK : GPIO14
+MISO: GPIO12 (Master Input, Slave Output) (input  for the ESP8266)
+MOSI: GPIO13 (Master Output,Slave Input ) (output for the ESP8266)
+
+The CS pin can be any pin.
+
+
+The associated functions are :
+
+spi.setup(speed, SPI_MODE, MSBFIRST)  -> set speed and mode
+   Only the first argument is required, the other default to SPI_MODE0 and to MSB_FIRST
+   Example spi.speed(1000000, 0, 1) -> same as spi.speed(1000000)
+
+var = spi.byte(val) -> read and write a byte at the same time (the arguments are numbers)
+   Example:
+   dat = spi.byte(55)
+
+var$ = spi.string(string, len) -> write and receive a string of len chars
+   Example:
+   dat$ = spi.string("Hello World!", 12)
+
+var$ = spi.hex(hex_string, len) -> write and receive a string containing an hexadecimal message representing len bytes 
+   Example:
+   dat$ = spi.hex("a1b2c3d4e5f6", 6) -> send 6 bytes (sequence of a1, b2, c3, d1, e5, f6) and receive in dat$
+
+
+This is an example of a Microchip MCP23S17 Expander connected to the ESP8266.
+This chip permit to expand the I/O of the ESP8266 delivering 2 additional ports of 8 bits (PORT A and PORT B).
+Each bit of each port can be individually set as output or input (with an optional pull-up).
+The following example will set the PORT A as output and the PORTB as input.
+Then a code from 0 to 255 is sent to the PORT A (assuming that 8 leds are connected);
+at the same time, the port B is read and its value is printed into the console.
+The CS is connected on the GPIO5.
+
+memclear
+cls
+
+spi.setup(1000000, 0)
+
+gosub [init.expander]
+
+for i = 0 to 255
+' write port A
+add = 18
+dat = (not i)
+gosub [write_exp]
+'read port B
+add = 19
+gosub [read_exp]
+serialprintln dat
+next i
+
+end
+
+''''''''''''''''''''''''''''''''''''
+' INIT THE MCP27S17 EXPANDER
+''''''''''''''''''''''''''''''''''''
+[init.expander]
+'disable HAEN (Hardware Address Enable)
+add = 12 ' IOCON
+dat = 0 ' disable HAEN
+gosub [write_exp]
+'set the expander with port A output
+add = 0 'IODIRA
+dat = 0 ' all outputs
+gosub [write_exp]
+'set the expander with port B input
+add = 1 'IODIRB
+dat = 255 ' all inputs
+gosub [write_exp]
+'set the expander with pull-up on port B inputs
+add = 13 'GPPUB
+dat = 255 ' all inputs pullup active
+gosub [write_exp]
 return
 
-'''''''''''''''''''''''''''''''''''''''''''''
-'Test for MID= and instr instrrev
-' instrrev search string from the end (reverse)
-'''''''''''''''''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''
+' WRITE to the MCP23S17 EXPANDER
+' this function uses the variables
+' add = address - INPUT -
+' dat = data - INPUT -
+'''''''''''''''''''''''''''''''''''
+[write_exp]
+'chip select
+po 5 0
+spi.byte(64) 'writemode (0x40)
+spi.byte(add)
+spi.byte(dat)
+po 5 1
+return
 
-a = "12345678901234567890"
-mid( a , 10, 2 ) = "GIORGIO"
-print a
+''''''''''''''''''''''''''''''''''''
+' READ from the MCP23S17 EXPANDER
+' this function uses the variables
+' add = address - INPUT -
+' dat = data - OUTPUT - 
+'''''''''''''''''''''''''''''''''''
+[read_exp]
+'chip select
+po 5 0
+spi.byte(65) 'readmode (0x41)
+spi.byte(add)
+dat = spi.byte(dat)
+po 5 1
+return
 
-print instr(a, "78")
-print instrrev(a, "78")
 
-print instr(a, "78", 10)
-print instrrev(a, "78", 10)
-end
+
+
+
+
+
+
+
+
+
+
 

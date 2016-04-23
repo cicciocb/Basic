@@ -89,6 +89,7 @@ int function_callback( void *user_data, const char *name, const int num_args, co
   int i, max_args;
   float tmp;
   String fname = String(name);
+  fname.toLowerCase();
   delay(0);
 
   // example to show the user-data parameter, sets the maximum number of
@@ -174,7 +175,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str = args_str[0]->substring((int) args[1] - 1);
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("MID() : The first argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("MID() : The first argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("mid") && num_args == 3 ) {
     // example of the mid(string, start, end)
@@ -184,7 +188,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str = args_str[0]->substring((int) args[1] - 1, (int) (args[1] + args[2]) - 1 );
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("MID() : The first argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("MID() : The first argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("right") && num_args == 2 ) {
     // example of the right(string, length)
@@ -194,7 +201,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str = args_str[0]->substring(args_str[0]->length() - (int) args[1]);
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("RIGHT() : The first argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("RIGHT() : The first argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("left") && num_args == 2 ) {
     // example of the left(string, length)
@@ -204,14 +214,20 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str = args_str[0]->substring(0, (int) args[1]);
       return PARSER_STRING;
     }
-     else { PrintAndWebOut(F("LEFT() : The first argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("LEFT() : The first argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("word") && num_args > 1 ) {
     // example of the word(string, length)
     // set return value
     char bla;
     if ( (args_str[0] == NULL) || ( (num_args == 3) && (args_str[2] == NULL)) )
-       { PrintAndWebOut(F("WORD() : The first and 3rd argument must be string!")); return PARSER_FALSE; }
+    {
+      PrintAndWebOut(F("WORD() : The first and 3rd argument must be string!"));
+      return PARSER_FALSE;
+    }
     if (num_args == 2) bla = ' ';
     if (num_args == 3) bla = *args_str[2]->c_str();
     *value_str = getValue(*args_str[0], bla  , (int) args[1] - 1 );
@@ -226,7 +242,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
     *value  = args_str[0]->length();
     return PARSER_TRUE;
   }
-   else { PrintAndWebOut(F("LEN() : The argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("LEN() : The argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("upper") && num_args == 1 ) {
     // example of the upper(string)
@@ -237,7 +256,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str  =  *args_str[0];
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("UPPER() : The argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("UPPER() : The argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("lower") && num_args == 1 ) {
     // example of the lower(string)
@@ -248,7 +270,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str  =  *args_str[0];
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("LOWER() : The argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("LOWER() : The argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( (fname == F("instr") || fname == F("instrrev")) && ( (num_args == 2) || (num_args == 3) ) ) {
     // example of the instr(string, string)
@@ -267,13 +292,24 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       }
       return PARSER_TRUE;
     }
-    else { PrintAndWebOut(F("INSTR() : Both arguments must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("INSTR() : Both arguments must be a string!"));
+      return PARSER_FALSE;
+    }
   }
-  else if ( fname == F("hex") && num_args == 1 ) {
-    // example of the hex(value)
-    // set return value
-    *value_str  = String((int) args[0], HEX);
-    return PARSER_STRING;
+  else if ( fname == F("hex") ) {
+    if ( num_args == 1 ) {
+      // example of the hex(value)
+      // set return value
+      *value_str  = String((int) args[0], HEX);
+      return PARSER_STRING;
+    }
+    else
+      if ( num_args == 2 ) {   // example of the hex(value, nb_digits)
+        String tmp = "0000000" + String((int) args[0], HEX);
+        *value_str = tmp.substring(tmp.length() - args[1]);
+            return PARSER_STRING;
+      }
   }
   else if ( fname == F("oct") && num_args == 1 ) {
     // example of the oct(value)
@@ -301,7 +337,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value = (*args_str[0])[0];
       return PARSER_TRUE;
     }
-    else { PrintAndWebOut(F("ASC() : The argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("ASC() : The argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("val") && num_args == 1 ) {
     // function val(string) -> return the numeric value of the string
@@ -311,7 +350,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value = (int) strtol( args_str[0]->c_str(), 0, 10);
       return PARSER_TRUE;
     }
-    else { PrintAndWebOut(F("VAL() : The argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("VAL() : The argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
       else if ( fname == F("hextoint") && num_args == 1 ) {
     // function hextoint(string) -> return the numeric value of the hex string
@@ -321,7 +363,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value = (int) strtol( args_str[0]->c_str(), 0, 16);
       return PARSER_TRUE;
     }
-    else { PrintAndWebOut(F("HEXTOINT() : The argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("HEXTOINT() : The argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("replace") && num_args == 3 ) {
     // example of the replace(string, string to search for, string to replacement for}
@@ -332,7 +377,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str = *args_str[0];
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("REPLACE() : All the arguments must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("REPLACE() : All the arguments must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("str") && num_args == 1 ) {
     // example of str(number) converts the number to string
@@ -376,7 +424,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       else if (num_args == 2 )   *value_str  =  FetchWebUrl(*args_str[0], args[1]);
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("WGET() : The first arguments must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("WGET() : The first arguments must be a string!"));
+      return PARSER_FALSE;
+    }
   }
 
   else if ( fname == F("sendts") && num_args == 3 ) {
@@ -387,7 +438,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       FetchWebUrl(String(F("api.thingspeak.com/update?key=")) + *args_str[0] + "&field" + *args_str[1] + "=" + *args_str[2], 80);
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("SENDTS() : All the arguments must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("SENDTS() : All the arguments must be a string!"));
+      return PARSER_FALSE;
+    }
   }
 
   else if ( fname == F("readts") && num_args == 3 ) {
@@ -400,7 +454,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str = MyOut;
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("READTS() : All the arguments must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("READTS() : All the arguments must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("readopenweather") && num_args == 2 ) {
     // function readopenweather(url, index)
@@ -410,7 +467,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str  =  FetchOpenWeatherMapApi(*args_str[0], String(args[1]));
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("ReadOpenWeather() : The first argument must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("ReadOpenWeather() : The first argument must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("json") && num_args == 2 ) {
     // function json(buffer, key)
@@ -420,7 +480,10 @@ int function_callback( void *user_data, const char *name, const int num_args, co
       *value_str  =  Parsifal(*args_str[0], *args_str[1]);
       return PARSER_STRING;
     }
-    else { PrintAndWebOut(F("JSON() : Both arguments must be a string!")); return PARSER_FALSE; }
+    else {
+      PrintAndWebOut(F("JSON() : Both arguments must be a string!"));
+      return PARSER_FALSE;
+    }
   }
   else if ( fname == F("io") && num_args > 0 ) {
     // function json(buffer, key)
@@ -428,87 +491,155 @@ int function_callback( void *user_data, const char *name, const int num_args, co
     *value_str  =  UniversalPinIO(*args_str[0], *args_str[1],  args[2]);
     return PARSER_STRING;
   }
+  else if ( fname == F("neosetpin") && num_args == 1 ) {
+    // function neosetup(pin)
+    if (pixels != NULL)
+      delete pixels;
+    pixels = new Adafruit_NeoPixel(512, args[0], NEO_GRB + NEO_KHZ800);
+    pixels->begin();
+    return PARSER_STRING;
+  }
   else if ( fname == F("neo") && num_args > 0 ) {
     // function neo(led no, r, g, b)
-    // set return value
-    pixels.setPixelColor(args[0], pixels.Color(args[1], args[2], args[3]));
-    pixels.show();
+    if (pixels == NULL)
+    {
+      pixels = new Adafruit_NeoPixel(512, 15, NEO_GRB + NEO_KHZ800);
+      pixels->begin();
+    }
+    pixels->setPixelColor(args[0], pixels->Color(args[1], args[2], args[3]));
+    pixels->show();
     return PARSER_STRING;
   }
   else if ( fname == F("neostripcolor") && num_args > 0 ) {
-    // function json(buffer, key)
-    // set return value
-    for (int LedNo = args[0]; LedNo <= args[1]& LedNo < 255  ; LedNo++) {
-      pixels.setPixelColor(LedNo, pixels.Color(args[2], args[3], args[4]));
+    // function neostripcolor(start, end, r, g, b)
+    if (pixels == NULL)
+    {
+      pixels = new Adafruit_NeoPixel(512, 15, NEO_GRB + NEO_KHZ800);   
+      pixels->begin();
+    }
+    for (int LedNo = args[0]; (LedNo <= args[1]) && (LedNo < 512); LedNo++) {
+      pixels->setPixelColor(LedNo, pixels->Color(args[2], args[3], args[4]));
       delay(0);
     }
-    pixels.show();
+    pixels->show();
     return PARSER_STRING;
   }
+  else if ( fname == F("neocls") && num_args == 0 ) {
+    // function neocls()
+    // set return value
+    if (pixels == NULL)
+    {
+      pixels = new Adafruit_NeoPixel(512, 15, NEO_GRB + NEO_KHZ800);       
+      pixels->begin();
+    }
+    for (int LedNo = 0; LedNo < 512  ; LedNo++) {
+      pixels->setPixelColor(LedNo, pixels->Color(0, 0, 0));
+      delay(0);
+    }
+    pixels->show();
+    return PARSER_STRING;
+  }  
   else if ( fname == F("temp") && num_args > 0 ) {
     // function temp(sensor #)
     // set return value
     *value  = sensors.getTempCByIndex(args[0]);
     return PARSER_TRUE;
   }
-
+  else if ( fname == F("dht.setup") ) // dht.setup(model, pin) -> model can be 11, 21, 22
+  {
+    // function dht.setup( model, pin)
+    uint8_t pin;
+    uint8_t model;
+    switch ( num_args )
+    {
+      case 1:
+        model = args[0];
+        pin = 5;
+        break;
+      case 2:
+        model = args[0];
+        pin = args[1];
+        break;
+      default:
+        model = 21; // default DHT21
+        pin = 5; // default pin
+        break;
+    } 
+    if (dht != NULL)
+      delete dht;
+    dht = new DHT(pin, model);
+    dht->begin();
+    // set return value
+    return PARSER_TRUE;
+  }
   else if ( fname == F("dht.temp") ) {
     // function dht.temp()
     // set return value
-    *value  = dht.readTemperature();
+    if (dht == NULL)
+    {
+      dht = new DHT(5, 21);
+      dht->begin();
+    }
+    *value  = dht->readTemperature();
     return PARSER_TRUE;
   }
   else if ( fname == F("dht.hum") ) {
     // function dht.hum()
     // set return value
-    *value  = dht.readHumidity();
+    if (dht == NULL)
+    {
+      dht = new DHT(5, 21);
+      dht->begin();
+    }    
+    *value  = dht->readHumidity();
     return PARSER_TRUE;
   }
   else if ( fname == F("dht.heatindex") ) {
     // function dht.heatindex()
     // set return value
-    *value  = dht.computeHeatIndex(dht.readTemperature(), dht.readHumidity(), false);
+    if (dht == NULL)
+    {
+      dht = new DHT(5, 21);
+      dht->begin();
+    }    
+    *value  = dht->computeHeatIndex(dht->readTemperature(), dht->readHumidity(), false);
     return PARSER_TRUE;
   }
-  
-  else if ( fname == F("neocls") && num_args == 0 ) {
-    // function json(buffer, key)
+  else if ( fname == F("i2c.begin") && num_args == 1 ) {
+    // function i2c.begin(address)
     // set return value
-    for (int LedNo = 0; LedNo < 255  ; LedNo++) {
-      pixels.setPixelColor(LedNo, pixels.Color(0, 0, 0));
-      delay(0);
-    }
-    pixels.show();
+    Wire.beginTransmission((byte)args[0]);
+    *value_str  =  String(F(""));
     return PARSER_STRING;
   }
   else if ( fname == F("i2c.write") && num_args == 1 ) {
-    // function json(buffer, key)
+    // function i2c.write(byte to be written)
     // set return value
-    *value_str  =  String(Wire.write((int)args[0]));
+    *value_str  =  String(Wire.write((byte)args[0]));
     return PARSER_STRING;
   }
   else if ( fname == F("i2c.end") && num_args == 0 ) {
-    // function json(buffer, key)
+    // function i2c.end()
     // set return value
     *value_str  =  String(Wire.endTransmission());
     return PARSER_STRING;
   }
   else if ( fname == F("i2c.requestfrom") && num_args > 0 ) {
-    // function i2c.requestfrom(device id, key)
+    // function i2c.requestfrom(address, qty)
     // set return value
     *value_str  =  String(Wire.requestFrom((byte)args[0], (byte)args[1]));
     return PARSER_STRING;
   }
 
   else if ( fname == F("i2c.available") && num_args == 0 ) {
-    // function i2c.requestfrom(device id, key)
+    // function i2c.available()
     // set return value
     *value_str  =  String(Wire.available());
     return PARSER_STRING;
   }
 
   else if ( fname == F("i2c.read") && num_args == 0 ) {
-    // function i2c.requestfrom(device id, key)
+    // function i2c.read()
     // set return value
     *value_str  =  String(Wire.read());
     return PARSER_STRING;
@@ -555,9 +686,74 @@ int function_callback( void *user_data, const char *name, const int num_args, co
     }
     return PARSER_STRING;
   }
+  else if ( fname == F("gpio1reset") && num_args == 0 )
+  {
+     // function gpi01reset()  -> restore the normal functionality of the pin GPIO1 (TX)
+     pinMode(1, SPECIAL);
+     return PARSER_STRING;
+  }
+  else if ( fname == F("spi.setup") && num_args > 0 ) {
+    SPI.begin();
+    switch(num_args)
+    {
+      case 1:  //spi.setup(speed)
+        SPI.beginTransaction( SPISettings(args[0], MSBFIRST, SPI_MODE0)); 
+        break;
+      case 2:  //spi.setup(speed, SPI_MODE)
+        SPI.beginTransaction( SPISettings(args[0], MSBFIRST, args[1])); 
+        break;    
+      case 3:  //spi.setup(speed, SPI_MODE, MSBFIRST)
+        SPI.beginTransaction( SPISettings(args[0], args[2], args[1])); 
+        break;                
+    }
+      // set return value
+      *value = 0;
+     return PARSER_TRUE;
+  }
+  else if ( fname == F("spi.byte") && num_args == 1 ) {    // let a = spi.write(value_number) -> send and receive a  single byte
+    *value = SPI.transfer(args[0]);
+    return PARSER_TRUE;
+  }
+  else if ( fname == F("spi.string") && num_args == 2 ) { // let a$ = spi.string(value_string, length) -> send and receive a buffer of 'length' bytes
+    String ret;
+    char c;
+    ret.reserve(args[1]);
+    for (i=0; i<args[1]; i++)
+    {
+      c = SPI.transfer(args_str[0]->c_str()[i]);
+      ret.concat(c);
+    }
+    *value_str = ret;
+    return PARSER_STRING;
+  }  
+  else if ( fname == F("spi.hex") && num_args == 2 ) { // let a$ = spi.hex(value_string, length) -> send and receive a buffer of 'length' bytes; each byte is a 2 char hex string
+    if (args_str[0] == NULL)  { PrintAndWebOut(F("spi.hex() : First argument must be a string!")); return PARSER_FALSE; }
+    String ret;
+    char c, t;
+    String s;
+    ret.reserve(args[1] * 2); // each received byte is 2 chars
+    for (i = 0; i < (args[1] * 2); i += 2)
+    {
+      s = args_str[0]->substring(i , i + 2);
+      t = (char) strtol( s.c_str(), 0, 16);
+      c = SPI.transfer(t);
+      s = String( c, HEX);
+      if (s.length() == 1) s = "0" + s;
+      ret.concat(s);
+    }
+    *value_str = ret;
+    return PARSER_STRING;
+  }    
   else
   if ( (i = Search_Array(fname)) != -1) // check if is an array
   {
+    if ( num_args == 0) // the array is just defined as a name without arguments such as a$()
+    {
+      Serial.println(String(F("Array without argument ")) + fname  + String(i));
+      return PARSER_FALSE;
+    }
+    else if ( num_args == 1)
+    {
       if (basic_arrays[i].Format == PARSER_STRING) // string format
       {
         *value_str = basic_arrays[i].getString(args[0]);
@@ -568,8 +764,8 @@ int function_callback( void *user_data, const char *name, const int num_args, co
         *value = basic_arrays[i].getFloat(args[0]);
         return PARSER_TRUE;
       }
+    }
   }
-
 
   // failed to evaluate function, return false
   return PARSER_FALSE;

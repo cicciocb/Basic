@@ -71,22 +71,25 @@
 #include <Time.h>
 
 #include <Adafruit_NeoPixel.h>
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(512, 15, NEO_GRB + NEO_KHZ800);;
+Adafruit_NeoPixel *pixels = NULL;
 
+#include <SoftwareSerial.h>
+SoftwareSerial *swSer = NULL;
 
 //ThingSpeak Stuff
 
 
-const char BasicVersion[] = "ESP Basic 2.0.Alpha cicciocb 13";
+PROGMEM const char BasicVersion[] = "ESP Basic 2.0.Alpha cicciocb 17";
 
-
+// SPI STUFF
+#include <SPI.h>
 
 
 // The Math precision is defined, by default, inside expression_parser_string.h
 // there is a definition PARSER_PREC that can be double or float
 #include "expression_parser_string.h"
 char* _parser_error_msg;
-//String Line_For_Eval;
+
 PARSER_PREC numeric_value;
 String string_value ;
 int parser_result;
@@ -97,7 +100,8 @@ DallasTemperature sensors(&oneWire);
 
 
 #include <DHT.h>   // adafruit library
-DHT dht(5, DHT21);   // 5 is GPIO5, DHT21 you may want change at DHT11 or DHT22
+//DHT dht(5, DHT21);   // 5 is GPIO5, DHT21 you may want change at DHT11 or DHT22
+DHT *dht = NULL;
 
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE); // Set the LCD I2C address
 
@@ -259,6 +263,7 @@ Station Mode (Connect to your router):</th></tr>
 <br><br>Log In Key (For Security):</th></tr>
 <tr><th><p align="right">Log In Key:</p></th><th><input type="password" name="LoginKey" value="*LoginKey*"></th></tr>
 <tr><th><p align="right">Display menu bar on index page:</p></th><th><input type="checkbox" name="showMenueBar" value="off" **checked**> Disable<br></th></tr>
+<tr><th><p align="right">Run default.bas at startup :</p></th><th><input type="checkbox" name="autorun" value="on" **autorun**> Enable<br></th></tr>
 <tr><th><p align="right">OTA URL. Leave blank for default:</p></th><th><input type="text" name="otaurl" value="*otaurl*"></th></tr>
 <tr><th>
 <input type="submit" value="Save" name="save">
@@ -297,8 +302,6 @@ PROGMEM const char GraphicsEllipseCode[] =  R"=====(<ellipse cx="*x1*" cy="*y1*"
 
 PROGMEM const char GraphicsRectangleCode[] =  R"=====(<rect x="*x1*" y="*y1*" width="*x2*" height="*y2*" style="fill:*collor*"/>)=====";
 
-
-
 byte numberButtonInUse = 0;
 String ButtonsInUse[11];
 
@@ -313,7 +316,8 @@ int UdpRemotePort;
 
 
 // place where the program will jump on serial data reception
-int SerialBranchLine = 0;
+int SerialBranchLine  = 0;
+int Serial2BranchLine = 0;
 
 
 // Buffer to store incoming commands from serial port
@@ -325,66 +329,14 @@ int LastVarNumberLookedUp;                                 //Array to hold all o
 bool VariableLocated;
 
 const int TotalNumberOfVariables = 50;
-#define VariablesNameLength  10
-class basicVariable
-{
-  private:
-  char *_name = NULL;
-  String *_Text = NULL;
-  float _Number;
-  
-  public:
-  byte Format = 0;
-
-  String getName()
-  {
-    if (_name != NULL)
-      return String(_name);
-    else
-      return String("");
-  }
-
-  void setName(String n)    // the name is max 'VariablesNameLength' chars long
-  {
-    if (_name == NULL)
-    {
-      _name = (char *) malloc(VariablesNameLength + 1);  // allocate a buffer for 11 chars (10 + \0)
-    }
-    strncpy(_name, n.c_str(), VariablesNameLength + 1);
-  }
-
-  String getVar()
-  {
-    if (_Text != NULL)
-      return *_Text;
-    else
-      return String("");
-  }
-
-  void setVar(String v)
-  {
-    if (_Text == NULL)
-      _Text = new String();
-
-    *_Text = v;
-  }
-  void remove()
-  {
-    delete _Text;
-    free(_name);
-    _Text = NULL;
-    _name = NULL;
-  }
-  
-} AllMyVariables[TotalNumberOfVariables];
-
-
+#define VariablesNameLength  30
+#include "Classes.h"
 
 bool RunningProgram = 1;                                //Will be set to 1 if the program is currently running
 int RunningProgramCurrentLine = 0;                     //Keeps track of the currently running line of code
-byte NumberOfReturns;
+//byte NumberOfReturns;
 bool BasicDebuggingOn;
-uint16_t ReturnLocations[254];
+//uint16_t ReturnLocations[254];
 
 int TimerWaitTime;
 int timerLastActiveTime;
@@ -410,7 +362,7 @@ int SerialTimeOut;
 
 
 
-uint16_t ForNextReturnLocations[255];
+//uint16_t ForNextReturnLocations[255];
 
 
 
@@ -440,8 +392,8 @@ int dst = 0;
 FSInfo fs_info;
 
 void setup() {
-  dht.begin();
-  pixels.begin();
+//  dht.begin();
+//  pixels.begin();
   SPIFFS.begin();
   Serial.begin(9600);
   //Serial.setDebugOutput(true);
@@ -511,6 +463,7 @@ void setup() {
     GraphicsEliments[0][0] = 0;
     WebOut = F(R"=====(  <meta http-equiv="refresh" content="0; url=./input?" />)=====");
 
+    clear_stacks();  
     server.send(200, "text/html", WebOut);
   });
 
@@ -547,6 +500,7 @@ void setup() {
       {
         // really takes just the name for the new file otherwise it uses the previous one
         ProgramName = GetRidOfurlCharacters(server.arg("name"));
+        
         ProgramName.trim();
         if (ProgramName == "")
         {
@@ -563,6 +517,7 @@ void setup() {
 
       server.sendContent(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection:close\r\nTransfer-Encoding: chunked\r\nAccess-Control-Allow-Origin: *\r\n\r\n"));
       delay(0);
+      Serial.println(F("start sending"));
       // each "chunk" is composed of :
       // the size of the block (in hex) terminated by \r\n
       server.sendContent(String(String(AdminBarHTML).length(), 16) + CRLF);
@@ -600,7 +555,6 @@ void setup() {
           delay(0);
         }
       }
-      Serial.println("avant par ici");
       WebOut = String(EditorPageHTML);
       WebOut = WebOut.substring(WebOut.indexOf(F("</textarea>")));
       server.sendContent(String(WebOut.length(), 16) + CRLF);
@@ -621,7 +575,7 @@ void setup() {
     server.send(200, "text/html", editCodeJavaScript);
   });
 
-
+  
   server.on("/filelist", []()
   {
     String ret = "";
@@ -796,6 +750,7 @@ String SettingsPageHandeler()
   String LoginKey = LoadDataFromFile("LoginKey");
   String ShowMenueBar = LoadDataFromFile("ShowMenueBar");
   String otaUrl = LoadDataFromFile("otaUrl");
+  String autorun = LoadDataFromFile("autorun");
   //Serial.print("Loading Settings Files");
 
   if (millis() > LoggedIn + 600000 || LoggedIn == 0 )
@@ -834,13 +789,14 @@ String SettingsPageHandeler()
 
     if ( server.arg("save") == F("Save") )
     {
-      staName = GetRidOfurlCharacters(server.arg("staName"));
-      staPass = GetRidOfurlCharacters(server.arg("staPass"));
-      apName  = GetRidOfurlCharacters(server.arg("apName"));
-      apPass  = GetRidOfurlCharacters(server.arg("apPass"));
-      LoginKey = GetRidOfurlCharacters(server.arg("LoginKey"));
+      staName      = GetRidOfurlCharacters(server.arg("staName"));
+      staPass      = GetRidOfurlCharacters(server.arg("staPass"));
+      apName       = GetRidOfurlCharacters(server.arg("apName"));
+      apPass       = GetRidOfurlCharacters(server.arg("apPass"));
+      LoginKey     = GetRidOfurlCharacters(server.arg("LoginKey"));
       ShowMenueBar = GetRidOfurlCharacters(server.arg("showMenueBar"));
       otaUrl       = GetRidOfurlCharacters(server.arg("otaurl"));
+      autorun      = GetRidOfurlCharacters(server.arg("autorun"));
 
       SaveDataToFile("WIFIname" , staName);
       SaveDataToFile("WIFIpass" , staPass);
@@ -849,6 +805,7 @@ String SettingsPageHandeler()
       SaveDataToFile("LoginKey" , LoginKey);
       SaveDataToFile("ShowMenueBar" , ShowMenueBar);
       SaveDataToFile("otaUrl" , otaUrl);
+      SaveDataToFile("autorun" , autorun);
     }
 
     if ( server.arg("format") == F("Format") )
@@ -874,6 +831,16 @@ String SettingsPageHandeler()
     {
       WebOut.replace(F("**checked**"), "");
     }
+
+    if ( autorun == F("on"))
+    {
+      WebOut.replace(F("**autorun**"), F("checked"));
+    }
+    else
+    {
+      WebOut.replace(F("**autorun**"), "");
+    }
+    
   }
   return WebOut;
 }
@@ -911,15 +878,15 @@ void StartUpProgramTimer()
     // if the pin GPIO0 is taken to GND, the program will not start
     if (digitalRead(0) == 0)  return; // if the pin GPIO0 is at GND , stop the autorun
   }
-
-
-
+  if (LoadDataFromFile("autorun") != "on")  return; // if the autorun option is disabled, returns
   Serial.println(F("Starting Default Program"));
   RunningProgram = 1;
   RunningProgramCurrentLine = 0;
   WaitForTheInterpertersResponse = 0 ;
   numberButtonInUse = 0;
   HTMLout = "";
+
+  clear_stacks(); 
   return;
 }
 
@@ -1240,8 +1207,7 @@ void CheckForUdpData()
     //// test of gosub ///////
     if (UdpBranchLine > 0)
     {
-      NumberOfReturns = NumberOfReturns + 1;
-      ReturnLocations[NumberOfReturns] = RunningProgramCurrentLine - WaitForTheInterpertersResponse;  // if the program is in wait, it returns to the previous line to wait again
+      return_Stack.push(RunningProgramCurrentLine); // push the current position in the return stack
       WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
       RunningProgramCurrentLine = UdpBranchLine + 1; // gosub after the udpbranch label
       UdpBranchLine = - UdpBranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
@@ -1251,16 +1217,29 @@ void CheckForUdpData()
   if (Serial.available() > 0)
   {
     delay(50); // insure that the data can be received
-    //Serial.print("Serial.available() " +  String(Serial.available()));
-    //// test of gosub ///////
+    //// put like a gosub ///////
     if (SerialBranchLine > 0)
     {
-      NumberOfReturns = NumberOfReturns + 1;
-      ReturnLocations[NumberOfReturns] = RunningProgramCurrentLine - WaitForTheInterpertersResponse;  // if the program is in wait, it returns to the previous line to wait again
+      return_Stack.push(RunningProgramCurrentLine); // push the current position in the return stack
       WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
       RunningProgramCurrentLine = SerialBranchLine + 1; // gosub after the SerialBranch label
       SerialBranchLine = - SerialBranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
     }
+  }
+  if ((swSer != NULL))
+  {
+    if (swSer->available() > 0)
+    {
+      delay(50); // insure that the data can be received
+      //// put like a gosub ///////
+      if (Serial2BranchLine > 0)
+      {
+        return_Stack.push(RunningProgramCurrentLine); // push the current position in the return stack
+        WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
+        RunningProgramCurrentLine = Serial2BranchLine + 1; // gosub after the SerialBranch label
+        Serial2BranchLine = - Serial2BranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
+      }
+    }  
   }
 }
 
