@@ -56,6 +56,7 @@ int variable_callback( void *user_data, const char *name, float *value, String *
   {
       if (AllMyVariables[i].getName() == Name)
     {
+        LastVarNumberLookedUp = i;
         *value =  atof(AllMyVariables[i].getVar().c_str());
         
         *value_str = AllMyVariables[i].getVar();

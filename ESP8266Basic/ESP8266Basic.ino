@@ -42,7 +42,7 @@
 //#include <WiFiUdp.h>
 #include <ESP8266WebServer.h>
 #include <Wire.h>
-#include <ESP8266httpUpdate.h>               // that file need to be copied into the folder for 2.0.0-rc1
+//#include <ESP8266httpUpdate.h>               // that file need to be copied into the folder for 2.0.0-rc1
 #include <Servo.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -52,7 +52,7 @@
 #include "ESP8266httpUpdate.h"
 #include <time.h>
 //#include <HttpClient.h>                   // that line needs to be commented for esp8266-2.0.0-rc1
-//#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
+#include <ESP8266HTTPClient.h>              // that line needs to be added for the esp8266-2.0.0 and 2.1.0-rc2
 
 //LCD Stuff
 #include <LiquidCrystal_SR.h>
@@ -79,7 +79,7 @@ SoftwareSerial *swSer = NULL;
 //ThingSpeak Stuff
 
 
-PROGMEM const char BasicVersion[] = "ESP Basic 2.0.Alpha cicciocb 17";
+PROGMEM const char BasicVersion[] = "ESP Basic 2.0.Alpha cicciocb 18";
 
 // SPI STUFF
 #include <SPI.h>
@@ -399,7 +399,6 @@ void setup() {
   //Serial.setDebugOutput(true);
   WiFi.mode(WIFI_AP_STA);
   PrintAndWebOut(BasicVersion);
-
   //CheckWaitForRunningCode();
 
   server.on("/", []()
@@ -1207,7 +1206,8 @@ void CheckForUdpData()
     //// test of gosub ///////
     if (UdpBranchLine > 0)
     {
-      return_Stack.push(RunningProgramCurrentLine); // push the current position in the return stack
+      // if the program is in wait, it returns to the previous line to wait again
+      return_Stack.push(RunningProgramCurrentLine - WaitForTheInterpertersResponse); // push the current position in the return stack
       WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
       RunningProgramCurrentLine = UdpBranchLine + 1; // gosub after the udpbranch label
       UdpBranchLine = - UdpBranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
@@ -1220,7 +1220,8 @@ void CheckForUdpData()
     //// put like a gosub ///////
     if (SerialBranchLine > 0)
     {
-      return_Stack.push(RunningProgramCurrentLine); // push the current position in the return stack
+      // if the program is in wait, it returns to the previous line to wait again
+      return_Stack.push(RunningProgramCurrentLine - WaitForTheInterpertersResponse); // push the current position in the return stack
       WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
       RunningProgramCurrentLine = SerialBranchLine + 1; // gosub after the SerialBranch label
       SerialBranchLine = - SerialBranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
@@ -1234,7 +1235,8 @@ void CheckForUdpData()
       //// put like a gosub ///////
       if (Serial2BranchLine > 0)
       {
-        return_Stack.push(RunningProgramCurrentLine); // push the current position in the return stack
+        // if the program is in wait, it returns to the previous line to wait again
+        return_Stack.push(RunningProgramCurrentLine - WaitForTheInterpertersResponse); // push the current position in the return stack
         WaitForTheInterpertersResponse = 0;   //exit from the wait state but comes back again after the gosub
         RunningProgramCurrentLine = Serial2BranchLine + 1; // gosub after the SerialBranch label
         Serial2BranchLine = - Serial2BranchLine; // this is to avoid to go again inside the branch; it will be restored back by the return command
