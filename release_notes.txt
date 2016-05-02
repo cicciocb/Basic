@@ -1,364 +1,139 @@
-Release notes version cicciocb alpha 17:
+Release notes version cicciocb alpha 21:
 
-- New structure commands :
-   - if then else endif
-   - do loop {until | while}
-
-- Improved for command :
-   - the step can be defined
-
-- Improved handling for goto / gosub / return
-   - Now it's mandatory to have labels between square brackets like [LABEL1]
-   - The label length is limited to 30 characters
-
-- optimisation of ram memory
-   - more free memory available
-
--improved error handling
-   - more verbose error messages
-   - program stops when error is captured
-   - wrongly nested 'for / next' ,  'if / else / endif',  'do / loop' are checked on open / save with associated warnings
-
-- Increased the max length for the variable names from 10 to 30
-
-- Addition of the <autorun> option in the 'Settings' page 
-
-- Improvement for the neopixel functions ; now it's possible to define the pin
-
-- Improvement for the dht functions ; now it's possible to define the sensor (DHT11, DHT21, DHT22) and the pin
-
-- Improvement for the function hex() ; now it's possible to define the number of digits
-
-- Addition of the command gpio1reset permitting to restore the serial port communication
-
-- addition of a full serialport #2 (can transmit and receive)
-
-- Addition of the SPI functions
+- Addition of IR decoder / encoder
+- Addition of TFT ILI9341 display
+- Addition of the function eval()
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
 Detailed informations:
 
-IF / THEN / ELSE / ENDIF
-========================
+Addition of IR encoder (transmitter)
+=====================================
+For the moment only the Sony and the NEC coding are supported for the transmission
 
-Is possible to use structured 'if then else endif'.
-Example :
 
-a = 50
-b = 40
-c = 30
-d = 20
-e = 10
+ir.send.init(pin)     set the pin used for the IR transmission (led connected to GND via a resistor)
+  example : 
+  ir.send.init(4)     set the pin 4
 
-if a > b then
-  print "a > b"
-  if b >c then
-    print "b > c"
-    if c > d then
-      print "c > d"
-      if d > e then
-        print "d > e "
-      else
-        print "d < e "
-      end if
-    else
-      print "c < d "   
-    end if
-  else
-  print "b < c"
-  end if
-else
-  print "a < b"
-end if
-'''''''''''''''''''
+ir.send.nec(code, nb_bits)   send the code (string) composed of nb_bits bits
+  example:
+  ir.send.nec("4907d8c5", 32)
 
-The classic 'single line' is still valid such as :
-if a > b then print "a > b" else print "b > a"
-
-The 'end if' can be written also as 'endif'
-
-At each file save / file open, the nested levels are checked and the errors
-are printed; this permit to correct the code before run
+ir.send.sony(code, nb_bits)   send the code (string) composed of nb_bits bits
+  example:
+  ir.send.sony("910", 12)
 ------------------------------------------------------------------------------------
 
-DO LOOP { UNTIL | WHILE } condition
-===================================
 
-Is possible to use structured do loops, using the until or while condition.
-Example (taken directly from Liberty Basic help)
+Addition of IR decoder (receiver)
+=====================================
+Several coding are supported; refer to the library for more details
+The receiver can be a VS1838B or similar; this is very cheap (less than 2$ for 10!)
+An hacked IR receiver can be found into a TV, old video recorder, ....
 
- 'count to 10 using "loop while" and "loop until"
+ir.recv.init(pin)      set the pin used for the IR reception (IR receiver connected to the pin)
+  example:
+  ir.recv.init(5)      set the pin 5
+
+
+ir.recv.get()     get the code received ; the code is a string in hex format
+  example:
+  let r = ir.recv.get()      ->4907d8c5
+
+ir.recv.full()     get the code received + the format + nb_of bits
+                   this is useful to identify the kind of remote controller
+                   and the size of the message
+  example:
+  let r = ir.recv.full()     -> 4907d8c5:NEC:32
+
+
+ir.recv.dump()   get the code received but verbose the message received on the serial port1
+                 Probably more useful during debug
+  example:
+  let r = ir.recv.dump()
+
+------------------------------------------------------------------------------------
+
+Addition of TFT ILI9341 display
+=====================================
+A TFT IL9341 SPI display can be connected to the ESP.
+This display has a resolution of 320x240 with 16bits color.
+
+The display requires at 5 pins :
+3 for the SPI, one for the CS and another one for the D/C
+
+tft.init(CS_PIN, DC_PIN, rotation)    init the display specifying the pin used for the CS,
+                                      the DC and the screen rotation. If not specified, the
+                                      rotation will default to 0 (portrait).
+                                      Rotation can be 0 to 3
+   example:
+   tft.init(16, 4, 3)      set the pin 16 for the CS, the 4 for the DC and Landscape (3)
+
+tft.rgb(red, green, blue)             return the 16bits convertion of the colors red, green and blue
+                                      red, green and blue are in the range 0 - 255
+   example:
+   let col = tft.rgb(255,0,0)     
+   
+tft.fill(color)     -> fill the screen with the color; color can be obtained from tft.rgb() function
+
+   example:
+   tft.fill(tft.color(0,255,0))   -> fill the screen with green
+
+
+tft.line(x1,y1,x2,y2,col)     trace a line from the point (x1,y1) to the point(x2,y2) with color 'col'
+   example:
+   tft.line(10,10,20,20,tft.rgb(255,0,0))
+
+tft.rect(x,y,w,h,col)     trace a rectangle from the point (x,y) with width 'w' and height 'h' with color 'col'
+   example:
+   tft.rect(10,10,20,20,tft.rgb(0,0,255))
+ 
+tft.rect.fill(x,y,w,h,col)   trace a filled rectangle from the point (x,y) with width 'w' and height 'h' with color 'col'
+   example:
+   tft.rect.fill(10,10,20,20,tft.rgb(0,0,255))
+
+tft.rect.round(x,y,w,h,rad,col)  trace a rounded rectangle from the point (x,y) with width 'w' and height 'h',
+                             radius 'rad' and with color 'col'
+   example:
+   tft.rect.round(10,10,100,100,5,tft.rgb(0,0,255))
+
+tft.rect.round.fill(x,y,w,h,rad,col)  trace a rounded filled rectangle from the point (x,y) with width 'w' and height 'h',
+                                      radius 'rad' and with color 'col'
+   example:
+   tft.rect.round.fill(10,10,100,100,5,tft.rgb(0,0,255))
+
+tft.circle(x,y,rad,col)     trace a circle with center in (x,y), radius 'rad' and color 'col'
+   example:
+    tft.circle(160,120,50,65535)
+
+tft.circle.fill(x,y,rad,col)     trace a filled circle with center in (x,y), radius 'rad' and color 'col'
+   example:
+    tft.circle.fill(160,120,50,65535)
+
+
+tft.text.color(col)    define the color used for the text printed
+
+tft.text.cursor(x,y)   define the position of the cursor where the text will be printed
+
+tft.text.size(size)    define the size of the text printed; can be from 1 to 8 (the font is always the same)
+
+tft.print(txt)         print the text on the screen using the color, position and size defined with the previous commands
+
+tft.println(txt)       same as tft.print() but after the command goes to the next line
+
+    example:
+    tft.text.color(tft.rgb(255,255,0))
+    tft.text.cursor(0,50)
+    tft.text.size(2)
+    tft.print("This is ")
+    tft.println("print ")
+    tft.println("second line")
+    tft.println("third line")
     
-a = 0
-b = 0
 
-do
-    print a
-    a = a + 1
-loop while a < 11
-print
- 
-do
-    print b
-    b = b + 1
-loop until b = 11
-
-The loop is executed at least one time as the checking is done at the end of the loop.
-------------------------------------------------------------------------------------
-
-FOR / next improvements
-=======================
-
-Is possible to use the optional 'step' keyword.
-The value for step can be negative and not limited to integer value.
-The variable after the next keyword is optional
-
-Example :
-
-for index = 20 to 2 step -1
-   print index
-next index
-
-for x = 0 to 3.14 step 0.1
-   print  "The sine of " & x & " is " & sin(x)
-next 
-------------------------------------------------------------------------------------
-
-Addition of the <autorun> option in the 'Settings' page
-=======================================================
-A new option permit to disable the autorun of the 'default.bas' program.
-Very useful during debug phase. 
-------------------------------------------------------------------------------------
-
-Neopixel functions improvement
-==============================
-A new command 'neosetpin( pin )' permit to define the pin used for NEOPIXELS
-
-Example :
-
-neosetpin(5) will define GPIO5
-
-If neosetpin() is not used, the default pin remains GPIO15
-------------------------------------------------------------------------------------
-
-DHT sensors improvements
-========================
-A new command 'dht.setup( model, pin) permit to define the sensor mode and the pin used
-The model can be :
-11 for DHT11
-21 for DHT21
-22 for DHT22
-
-The pin can be any valid pin.
-
-Example (for DHT11 on pin GPIO4):
-
-dht.setup(11, 4)
-print dht.temp()
-print dht.hum()
-
-if dht.setup() is not used, the model and the pin are default to DHT21 and pin GPIO5
-------------------------------------------------------------------------------------
-
-Improvement for the function hex()
-==================================
-It is possible to add a 2nd optional argument to this function to define the number
-of characters generated.
-
-Example:
-
-print hex(12)		-> c
-print hex(12, 2)	-> 0c
-print hex(2170)		-> 87a
-print hex(2170, 4)	-> 087a
-print hex(2170, 6)	-> 00087a
-------------------------------------------------------------------------------------
-
-Addition of the command gpio1reset
-==================================
-The command 'gpio1reset() permit to recover the normal behaviour of the TX pin
-
-Example:
-
-for i = 1 to 5
-  po 1 0
-  delay 300
-  po 1 1
-  delay 300
-next i
-
-print "The serial port is blocked now"
-delay 300
-gpio1reset()
-
-print "The serial port is unlocked now"
-------------------------------------------------------------------------------------
-
-Addition of a full serialport #2
-===============================
-A new serial port has been included. This is now a software port so we can freely define
-the pins for the TX and the RX.
-The associated commands are :
-
-serial2begin speed, TX_pin, RX_pin
-   Open the serialport2 channel.
-   The speed can be any value up to 115200.
-   The TX_pin and RX_pin can be any valid pin (except GPIO16).
-   TX_pin and RX_pin are optional and default to 2 (TX_pin) and 12 (RX_pin)
-
-serial2end
-   Close the serialport2 channel.
-
-serial2print var
-   print the var
- 
-serial2prinln
-   print the var adding <new line> at the end
-
-serial2input var
-   get into var the byte received from the serial port (port 2)
-
-serial2branch label
-   jumps to the label as soon as serial data are received (port 2)
-
-
-Example (taken from the serialport 1 example)
-
-memclear
-print ramfree()
-serial2branch [serial2in]
-wait
-
-[serial2in]
-serial2input zz$
-Serial2print “received:”
-serial2println zz$
-return
-------------------------------------------------------------------------------------
-
-Addition of the SPI functions
-=============================
-The SPI port has been enabled permitting to interface with SPI devices
-
-The associated pins are :
-
-SCK : GPIO14
-MISO: GPIO12 (Master Input, Slave Output) (input  for the ESP8266)
-MOSI: GPIO13 (Master Output,Slave Input ) (output for the ESP8266)
-
-The CS pin can be any pin.
-
-
-The associated functions are :
-
-spi.setup(speed, SPI_MODE, MSBFIRST)  -> set speed and mode
-   Only the first argument is required, the other default to SPI_MODE0 and to MSB_FIRST
-   Example spi.speed(1000000, 0, 1) -> same as spi.speed(1000000)
-
-var = spi.byte(val) -> read and write a byte at the same time (the arguments are numbers)
-   Example:
-   dat = spi.byte(55)
-
-var$ = spi.string(string, len) -> write and receive a string of len chars
-   Example:
-   dat$ = spi.string("Hello World!", 12)
-
-var$ = spi.hex(hex_string, len) -> write and receive a string containing an hexadecimal message representing len bytes 
-   Example:
-   dat$ = spi.hex("a1b2c3d4e5f6", 6) -> send 6 bytes (sequence of a1, b2, c3, d1, e5, f6) and receive in dat$
-
-
-This is an example of a Microchip MCP23S17 Expander connected to the ESP8266.
-This chip permit to expand the I/O of the ESP8266 delivering 2 additional ports of 8 bits (PORT A and PORT B).
-Each bit of each port can be individually set as output or input (with an optional pull-up).
-The following example will set the PORT A as output and the PORTB as input.
-Then a code from 0 to 255 is sent to the PORT A (assuming that 8 leds are connected);
-at the same time, the port B is read and its value is printed into the console.
-The CS is connected on the GPIO5.
-
-memclear
-cls
-
-spi.setup(1000000, 0)
-
-gosub [init.expander]
-
-for i = 0 to 255
-' write port A
-add = 18
-dat = (not i)
-gosub [write_exp]
-'read port B
-add = 19
-gosub [read_exp]
-serialprintln dat
-next i
-
-end
-
-''''''''''''''''''''''''''''''''''''
-' INIT THE MCP27S17 EXPANDER
-''''''''''''''''''''''''''''''''''''
-[init.expander]
-'disable HAEN (Hardware Address Enable)
-add = 12 ' IOCON
-dat = 0 ' disable HAEN
-gosub [write_exp]
-'set the expander with port A output
-add = 0 'IODIRA
-dat = 0 ' all outputs
-gosub [write_exp]
-'set the expander with port B input
-add = 1 'IODIRB
-dat = 255 ' all inputs
-gosub [write_exp]
-'set the expander with pull-up on port B inputs
-add = 13 'GPPUB
-dat = 255 ' all inputs pullup active
-gosub [write_exp]
-return
-
-''''''''''''''''''''''''''''''''''''
-' WRITE to the MCP23S17 EXPANDER
-' this function uses the variables
-' add = address - INPUT -
-' dat = data - INPUT -
-'''''''''''''''''''''''''''''''''''
-[write_exp]
-'chip select
-po 5 0
-spi.byte(64) 'writemode (0x40)
-spi.byte(add)
-spi.byte(dat)
-po 5 1
-return
-
-''''''''''''''''''''''''''''''''''''
-' READ from the MCP23S17 EXPANDER
-' this function uses the variables
-' add = address - INPUT -
-' dat = data - OUTPUT - 
-'''''''''''''''''''''''''''''''''''
-[read_exp]
-'chip select
-po 5 0
-spi.byte(65) 'readmode (0x41)
-spi.byte(add)
-dat = spi.byte(dat)
-po 5 1
-return
-
-
-
-
-
-
-
-
-
-
-
+tft.demo()     -> runs a demo taken directly from the arduino demos. Useful at the beginning to check the display.
 
 
